@@ -57,7 +57,9 @@ const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&
 const L = 'ABCD';
 const store = {
   get(k) { try { return JSON.parse(localStorage.getItem('wb650:' + k) || '{}'); } catch (e) { return {}; } },
-  set(k, v) { try { localStorage.setItem('wb650:' + k, JSON.stringify(v)); } catch (e) {} }
+  set(k, v) { try { localStorage.setItem('wb650:' + k, JSON.stringify(v)); } catch (e) {} },
+  del(k) { try { localStorage.removeItem('wb650:' + k); } catch (e) {} },          // 초기화 단추(2026-10-03)
+  clear() { try { Object.keys(localStorage).filter(x => x.startsWith('wb650:')).forEach(x => localStorage.removeItem(x)); } catch (e) {} }
 };
 document.addEventListener('play', e => { if (e.target.tagName === 'AUDIO') document.querySelectorAll('audio').forEach(a => { if (a !== e.target) a.pause(); }); }, true);
 
@@ -71,7 +73,7 @@ function home() {
   const byPart = {};
   D.decks.forEach((d, i) => (byPart[d.part] = byPart[d.part] || []).push(i));
   let h = `<h1>YBM 토익 650+ 워크북</h1><p class="sub">ETS 토익 단기공략 650+ (2025) · 교재 화면 그대로 · PART 1~7</p>
-  <div class="note">교재 각 Unit을 <b>쪽 순서 그대로</b> 봅니다. 정답은 가려져 있어요 — 문제 아래 <b>(A)~(D)</b>를 고르세요 — 한 쪽의 문항을 <b>모두 고르면</b> 채점되고 정답·해설이 나오며, <b>정답 보기</b>를 누르면 교재의 정답 표시가 드러납니다. 🔊가 있는 쪽은 음원을 들으며 푸세요(이어폰 권장). 푼 기록은 이 기기에 저장됩니다.</div>`;
+  <div class="note">교재 각 Unit을 <b>쪽 순서 그대로</b> 봅니다. 정답은 가려져 있어요 — 문제 아래 <b>(A)~(D)</b>를 고르세요 — 한 쪽의 문항을 <b>모두 고르면</b> 채점되고 정답·해설이 나오며, <b>정답 보기</b>를 누르면 교재의 정답 표시가 드러납니다. 🔊가 있는 쪽은 음원을 들으며 푸세요(이어폰 권장). 푼 기록은 이 기기에 저장되고, Unit 위쪽 <b>기록 지우기</b>나 목차 맨 아래 <b>푼 기록 모두 지우기</b>로 지울 수 있습니다.</div>`;
   Object.keys(D.parts).forEach(p => {
     if (!byPart[p]) return;
     h += `<div class="part"><h2>${esc(D.parts[p])}</h2>` + byPart[p].map(i => {
@@ -80,14 +82,16 @@ function home() {
       return `<button class="deck" data-i="${i}"><span class="t">${esc(d.name)}</span><span class="m">${d.s.length}쪽${pg}${n ? ` · ${r.ok}/${n}` : ''}</span>${n ? `<span class="bar"><i style="width:${Math.round(100 * r.ok / n)}%"></i></span>` : ''}</button>`;
     }).join('') + '</div>';
   });
+  h += `<div class="nav"><span></span><button class="btn" id="resetAll">푼 기록 모두 지우기</button></div>`;
   $('#app').innerHTML = h;
+  $('#resetAll').onclick = () => { if (confirm('이 기기에 저장된 워크북 푼 기록을 모두 지울까요? (모든 Unit)')) { store.clear(); home(); } };
   document.querySelectorAll('.deck').forEach(b => b.onclick = () => { location.hash = '#/' + D.decks[+b.dataset.i].k; });
   window.scrollTo(0, 0);
 }
 
 function deck(i) {
   const d = D.decks[i], ans = store.get(d.k);
-  let h = `<div class="top"><button class="btn" id="back">‹ 목차</button><span class="t">${esc(d.name)}</span><span class="score" id="score"></span><button class="btn" id="all">정답 모두 보기</button></div>`;
+  let h = `<div class="top"><button class="btn" id="back">‹ 목차</button><span class="t">${esc(d.name)}</span><span class="score" id="score"></span><button class="btn" id="reset">기록 지우기</button><button class="btn" id="all">정답 모두 보기</button></div>`;
   d.s.forEach((s, si) => {
     const ov = s.ov ? `<img class="ov" loading="lazy" src="wb/${d.k}/${String(s.n).padStart(3, '0')}a.webp" style="left:${s.ov[0]}%;top:${s.ov[1]}%;width:${s.ov[2]}%" alt="">` : '';
     h += `<div class="card" id="c${si}"><div class="sl" style="aspect-ratio:${1 / d.h}"><img loading="lazy" src="wb/${d.k}/${String(s.n).padStart(3, '0')}.webp" alt="${esc(d.name)} ${s.n}쪽">${ov}</div>`;
@@ -109,6 +113,7 @@ function deck(i) {
   const score = () => { const r = done(d), n = qCount(d); $('#score').textContent = n ? `맞힘 ${r.ok} / ${n}` : ''; };
   score();
   $('#back').onclick = () => { location.hash = '#/'; };
+  $('#reset').onclick = () => { if (confirm(d.name + ' 푼 기록을 지우고 처음부터 풀까요?')) { store.del(d.k); deck(i); } };
   if (prev) $('#prev').onclick = () => { location.hash = '#/' + prev.k; };
   if (next) $('#next').onclick = () => { location.hash = '#/' + next.k; };
   let all = false;
