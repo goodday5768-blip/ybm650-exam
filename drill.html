@@ -85,7 +85,7 @@ a.link{color:var(--acc);font-size:13px;cursor:pointer;text-decoration:underline}
 .kpi div{flex:1;min-width:84px;background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:8px 10px;text-align:center;font-size:13px}
 .kpi b{display:block;font-size:22px}
 </style>
-</head>
+<!--LEESS-GATE2--><script src="/leess/roster.js"></script><script src="/leess/gate.js"></script></head>
 <body>
 <div class="wrap">
   <header class="card" style="padding:14px 16px">
@@ -434,7 +434,7 @@ function codeCheck() {
 let startPoll = null;
 function start() {
   const name = $('#name').value.trim(), c = unpackCode($('#code').value);
-  if (!name || !c) return;
+  if (!name || !c) return; if (window.LEESS && !LEESS.ok(name)) { $('#codeMsg').innerHTML = '<span style="color:var(--warn)">' + LEESS.msg() + '</span>'; $('#name').focus(); window.scrollTo(0, 0); return; } /*LEESS*/
   store.set('name', name);
   if (!endTime(c.endMin)) return codeCheck();
   const kk = CFG[c.code] || store.get('cfg:' + c.code, null);
