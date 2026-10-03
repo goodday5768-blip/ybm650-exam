@@ -540,14 +540,18 @@ function report(event, extra) {
 // 옛 스크립트('ok' 문자열)면 판정 없이 통과, 서버 오류(HTML 등)도 통과(fail-open), 통신 자체가 안 되면 시작 불가.
 async function gate(name, range) {
   if (!D.reportUrl) return {allow: true};
-  const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 20000);
-  try {
-    const r = await fetch(D.reportUrl, {method: 'POST', signal: ctl.signal, headers: {'Content-Type': 'text/plain;charset=utf-8'},
-      body: JSON.stringify({event: 'start', name, range, device: DEVICE, app: D.title, time: fmtTime(new Date()), ua: navigator.userAgent.slice(0, 120)})});
-    const txt = await r.text();
-    try { const j = JSON.parse(txt); return typeof j.allow === 'boolean' ? j : {allow: true}; } catch (e) { return {allow: true, legacy: true}; }
-  } catch (e) { return {allow: false, offline: true}; }
-  finally { clearTimeout(t); }
+  // 2026-10-03: 서버가 늦게 깨어나면 20초를 넘겨 「서버에 연결하지 못했습니다」가 떴다 → 한 번에 60초까지 기다리고, 실패하면 한 번 더 시도
+  for (let i = 0; i < 2; i++) {
+    if (i) { const m = document.getElementById('msg'); if (m) m.textContent = '서버 응답이 늦어 한 번 더 확인하는 중…'; }
+    const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 60000);
+    try {
+      const r = await fetch(D.reportUrl, {method: 'POST', signal: ctl.signal, headers: {'Content-Type': 'text/plain;charset=utf-8'},
+        body: JSON.stringify({event: 'start', name, range, device: DEVICE, app: D.title, time: fmtTime(new Date()), ua: navigator.userAgent.slice(0, 120)})});
+      const txt = await r.text();
+      try { const j = JSON.parse(txt); return typeof j.allow === 'boolean' ? j : {allow: true}; } catch (e) { return {allow: true, legacy: true}; }
+    } catch (e) { if (i) return {allow: false, offline: true}; await new Promise(res => setTimeout(res, 1500)); }
+    finally { clearTimeout(t); }
+  }
 }
 const useRoster = () => Array.isArray(D.roster) && D.roster.length > 0;
 const nameValue = () => cleanName(useRoster() ? $('#nameSel').value : $('#name').value);
