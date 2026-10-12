@@ -738,7 +738,7 @@ function grade() {
   const txt = certText(cert);
   const res = $('#result'); res.hidden = false; $('#submit').hidden = true; $('#next').hidden = false;
   res.className = 'card banner ' + (PM ? (pass ? 'pass' : 'fail') : 'score');
-  res.innerHTML = (PM ? `<div class="big">${pass ? '합격' : '불합격'} · ${score}점</div><div>합격선 ${PM}점 · ${N}문제 중 ${correct}문제 정답 · ${pass ? `${cur.round}번째 도전에서 합격 — 선생님과 학부모님께 결과 문자가 갑니다` : '틀린 문제의 해설을 확인한 뒤, 합격할 때까지 전에 나온 문제를 뺀 새 문제로 다시 풀어 주세요'}</div>`
+  res.innerHTML = (PM ? `<div class="big">${pass ? '합격' : '불합격'} · ${score}점</div><div>합격선 ${PM}점 · ${N}문제 중 ${correct}문제 정답 · ${pass ? `${cur.round}번째 도전에서 합격 — 선생님께 결과 문자가 갑니다` : '틀린 문제의 해설을 확인한 뒤, 합격할 때까지 전에 나온 문제를 뺀 새 문제로 다시 풀어 주세요'}</div>`
     : `<div class="big">${score}점</div><div>100점 만점 · ${N}문제 중 ${correct}문제 정답${wrong.length ? ' · 틀린 문제의 해설을 확인하세요' : ' · 모두 정답'}</div>`) + `
     <div class="cert"><b>이 메시지를 선생님께 보내세요</b><textarea id="certTxt" rows="8" readonly>${esc(txt)}</textarea>
     <div class="row"><button id="copyCert">메시지 복사</button><button class="ghost" id="shareCert">공유하기</button></div><p class="muted" id="certMsg" style="margin:6px 0 0"></p></div>`;
@@ -778,7 +778,7 @@ if (/자이스토리/.test(D.title)) $('#appTitle').insertAdjacentHTML('afterbeg
 $('#appSub').textContent = D.sub;
 document.title = D.title;
 if (D.intro) $('#introP').innerHTML = D.intro;
-if (PM) $('#introP').insertAdjacentHTML('beforeend', ` <b>${PM}점 이상이면 합격</b>, 불합격이면 합격할 때까지 전에 나온 문제를 뺀 <b>새 문제로 다시</b> 풉니다. 합격하면 선생님과 학부모님께 점수 문자가 갑니다.`);
+if (PM) $('#introP').insertAdjacentHTML('beforeend', ` <b>${PM}점 이상이면 합격</b>, 불합격이면 합격할 때까지 전에 나온 문제를 뺀 <b>새 문제로 다시</b> 풉니다. 합격하면 선생님께 점수 문자가 갑니다.`);
 if (D.brand === 'none') { const b = document.querySelector('.brand'); if (b) b.hidden = true; document.body.classList.add('nobrand'); }   // 학원 배너 숨김(대학 강의용 등)
 if (D.consent) $('#consentP').innerHTML = D.consent;
 if (UW !== '지문') {                                  // 정적 문구의 '지문'도 같은 낱말로
