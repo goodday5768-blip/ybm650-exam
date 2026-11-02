@@ -168,6 +168,7 @@ body:not(.nobrand) #submit::before{content:"";display:inline-block;width:1.35em;
     <div id="consentV" style="margin-top:6px;font-size:12px;opacity:.6"></div>
     <div class="row" style="margin-top:12px"><button id="consentOk" style="flex:1">동의하고 시작</button><button class="ghost" id="consentNo">동의하지 않음</button></div>
   </div>
+  <div class="card" id="wrongCard" hidden><div class="row" style="justify-content:space-between;align-items:center"><b>틀린 문제 다시 풀기</b><button id="wrongGo"></button></div><p class="muted" style="margin:6px 0 0">이 휴대폰에서 틀린 문제를 모아 다시 냅니다(한 번에 최대 10문제). 맞히면 목록에서 빠집니다.</p></div>
   <div class="card" id="board"></div>
   <div class="card" id="logCard" hidden>
     <div class="row" style="justify-content:space-between"><b>내 시험 기록</b><span class="muted" id="logStat"></span></div>
@@ -304,6 +305,8 @@ const store = {
 };
 let rec = store.get('rec2', {});      // {pid: {ok, at}} 지문별 최근 정답 여부
 let use = store.get('use', {});       // {pid: {itemIndex: count}}
+let wrongs = store.get('wrongs', {});   // 틀린 문항 {지문id|문항번호: {n, at}} — 맞히면 지운다(11-02 오답 누적 복습)
+let reviewStart = false;
 let log = store.get('log2', []);      // 회차 기록 {at, key, score(점), correct, n, sec, wrong}
 let certs = store.get('certs', []);   // 내 점수 메시지(최근 20회)
 let roster = store.get('roster2', []); // 선생님 명단
@@ -458,6 +461,7 @@ function renderMyCerts() {
 // ---- 홈: 지문 복수 선택 ----
 function renderHome() {
   $('#home').hidden = false; $('#test').hidden = true; $('#teacher').hidden = true;
+  paintWrong();
   const board = $('#board'); board.innerHTML = '';
   if (AR) { sel = new Set(D.P.map((_, i) => i)); board.hidden = true; $('#clearSel').hidden = true; paintSel(); renderLog(); renderMyCerts(); window.scrollTo(0, 0); return; }   // 전체 무작위: 고르는 칸 없음
   let okCount = 0;
@@ -655,7 +659,23 @@ function buildQuestion(pi, k, bal) {
   }
   return q;
 }
+const PID = new Map(D.P.map((p, i) => [p.id, i]));
+const wrongKeys = () => Object.keys(wrongs).filter(w => PID.has(w.slice(0, w.lastIndexOf('|'))));
+function paintWrong() {
+  const n = wrongKeys().length, c = $('#wrongCard'); if (!c) return;
+  c.hidden = !n; $('#wrongGo').textContent = `${Math.min(n, 10)}문제 풀기` + (n > 10 ? ` (모두 ${n})` : '');
+}
+function reviewRound() {   // 많이 틀린 것·최근 것 먼저, 한 회에 한 지문은 한 문제(누출 규칙), 최대 10
+  const L = wrongKeys().map(w => { const i = w.lastIndexOf('|'); return {w, pi: PID.get(w.slice(0, i)), k: +w.slice(i + 1), n: wrongs[w].n || 1, at: wrongs[w].at || ''}; })
+    .filter(x => D.P[x.pi].items && x.k < D.P[x.pi].items.length)
+    .sort((a, b) => b.n - a.n || (a.at < b.at ? 1 : -1));
+  const used = new Set(), picked = [], hist = [0, 0, 0, 0, 0];
+  for (const x of L) { if (used.has(x.pi) || picked.length >= 10) continue; used.add(x.pi); picked.push([x.pi, x.k]); fixedAns(D.P[x.pi].items[x.k]).forEach(a => hist[a]++); }
+  const bal = {hist, prev: null};
+  return picked.sort((a, b) => a[0] - b[0]).map(([pi, k]) => buildQuestion(pi, k, bal));
+}
 function makeRound(indices) {
+  if (cur.review) return reviewRound();
   const plan = roundPlan(indices, cur.seen), picked = [], hist = [0, 0, 0, 0, 0];
   const selIds = [...plan.keys()].filter(pi => plan.get(pi)).map(pi => D.P[pi].id);
   for (const pi of shuffle([...plan.keys()])) if (plan.get(pi)) for (const k of pickItems(pi, plan.get(pi), cur.seen, hist, new Set(selIds.filter(id => id !== D.P[pi].id)))) {
@@ -728,12 +748,13 @@ async function start() {
     $('#msg').textContent = useRoster() ? '명단에서 본인 이름을 선택해야 시작할 수 있습니다.' : '이름을 먼저 입력하세요. 점수 메시지에 이름이 들어갑니다.';
     (useRoster() ? $('#nameSel') : $('#name')).focus(); window.scrollTo(0, 0); return;
   }
-  if (sel.size < SEL_MIN) return;
+  const review = reviewStart; reviewStart = false;
+  if (!review && sel.size < SEL_MIN) return;
   if (store.get('consent', '') !== consentId()) {   // 첫 시작 전 이용 동의(브라우저마다 1회)
     $('#consentV').textContent = '동의 문구 ' + consentId(); $('#consentCard').hidden = false; $('#consentCard').scrollIntoView({block: 'center'}); return;
   }
   $('#msg').textContent = '서버에서 이름·기기를 확인하는 중…'; $('#go').disabled = true; $('#go').textContent = '확인 중…';
-  const key = selLabel(sel), g = await gate(name, key);
+  const key = review ? '틀린 문제 다시' : selLabel(sel), g = await gate(name, key);
   paintSel();
   if (!g.allow) {
     $('#msg').textContent = g.offline ? '서버에 연결하지 못했습니다. 통신 상태를 확인한 뒤 다시 시도하세요.'
@@ -744,7 +765,7 @@ async function start() {
   const u = await UNLOCK.run(D, g, KEYST);
   if (!u.ok) { $('#msg').textContent = u.msg; window.scrollTo(0, 0); return; }
   $('#msg').textContent = ''; $('#who').textContent = name + ' 학생';
-  cur = {sel: new Set(sel), key, name, seen: new Set(), round: 0};   // seen: 이 범위로 푸는 동안 나온 문항(홈으로 나가면 초기화)
+  cur = {sel: review ? new Set() : new Set(sel), key, name, seen: new Set(), round: 0, review};   // seen: 이 범위로 푸는 동안 나온 문항(홈으로 나가면 초기화)
   $('#home').hidden = true; $('#test').hidden = false;
   newRound();
 }
@@ -757,7 +778,9 @@ function optHtml(name, opts, en, numbered, hc) {
   return `<div class="opts">${opts.map((o, i) => `<label class="opt${en ? ' en' : ''}"><input type="radio" name="${name}" value="${i}"><span>${numbered ? LAB(i) : ''}${hc ? o : rich(o)}</span></label>`).join('')}</div>`;
 }
 function newRound() {
-  cur.qs = makeRound(cur.sel); cur.t0 = Date.now(); cur.round++;
+  cur.qs = makeRound(cur.sel);
+  if (cur.review && !cur.qs.length) { renderHome(); $('#msg').textContent = '틀린 문제를 모두 맞혔습니다! 목록이 비었어요.'; window.scrollTo(0, 0); return; }
+  cur.t0 = Date.now(); cur.round++;
   cur.pts = pointsFor(cur.qs.length);
   cur.ansd = cur.qs.map(q => q.parts.map(() => null));
   $('#tNo').textContent = cur.key;
@@ -822,9 +845,11 @@ function grade() {
     const pts = cur.pts[qi];
     if (allOk) { correct++; score += pts; }
     rec[D.P[q.pi].id] = {ok: allOk, at: fmtTime(new Date())};
+    const wk = D.P[q.pi].id + '|' + q.k; if (allOk) delete wrongs[wk]; else wrongs[wk] = {n: ((wrongs[wk] || {}).n || 0) + 1, at: fmtTime(new Date())};
     const m = c.querySelector('.mark'); m.textContent = allOk ? `정답 +${pts}점` : '오답 0점'; m.className = 'mark ' + (allOk ? 'o' : 'x');
   });
   store.set('rec2', rec);
+  { const ks = Object.keys(wrongs); if (ks.length > 400) ks.sort((a, b) => wrongs[a].at < wrongs[b].at ? -1 : 1).slice(0, ks.length - 400).forEach(k => delete wrongs[k]); store.set('wrongs', wrongs); }
   $('#qs').className = 'done';
   const N = cur.qs.length, key = cur.key;
   const entry = {at: fmtTime(new Date()), key, score, correct, n: N, sec: Math.min(3600, Math.round((Date.now() - cur.t0) / 1000)), wrong};
@@ -847,7 +872,7 @@ function grade() {
   $('#copyCert').onclick = async () => { $('#certMsg').textContent = await copyText(txt) ? '복사했습니다. 카톡에 붙여 넣어 선생님께 보내세요.' : '복사가 막혀 있습니다. 위 메시지 칸을 길게 눌러 전체 선택 후 복사하세요.'; };
   if (navigator.share) $('#shareCert').onclick = async () => { try { await navigator.share({text: txt}); } catch (e) { if (e.name !== 'AbortError') $('#certMsg').textContent = '공유를 열 수 없습니다. 「메시지 복사」를 쓰세요.'; } };
   else $('#shareCert').hidden = true;
-  $('#next').textContent = PM && !pass ? `새 문제로 다시 풀기 (합격선 ${PM}점)` : `같은 범위로 새 ${N}문제 풀기`; $('#next').onclick = newRound;
+  $('#next').textContent = cur.review ? (wrongKeys().length ? `남은 틀린 문제 다시 (${Math.min(wrongKeys().length, 10)}문제)` : '틀린 문제 모두 해결 — 처음으로') : PM && !pass ? `새 문제로 다시 풀기 (합격선 ${PM}점)` : `같은 범위로 새 ${N}문제 풀기`; $('#next').onclick = newRound;
   window.scrollTo(0, 0);
 }
 
@@ -933,6 +958,7 @@ $('#tReload').onclick = loadTeacher;
 
 $('#tBack').onclick = renderHome;
 $('#filter').oninput = renderTeacher;
+$('#wrongGo').onclick = () => { reviewStart = true; start(); };
 $('#home2').onclick = () => {
   const b = $('#home2');
   if (!cur || $('#submit').hidden || b.dataset.armed) { delete b.dataset.armed; b.textContent = AR ? '처음으로' : UW + ' 선택으로'; renderHome(); return; }
