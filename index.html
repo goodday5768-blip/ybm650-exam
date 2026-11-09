@@ -464,6 +464,7 @@ function renderMyCerts() {
 // ---- 홈: 지문 복수 선택 ----
 function renderHome() {
   $('#home').hidden = false; $('#test').hidden = true; $('#teacher').hidden = true;
+  typeof NOTE !== 'undefined' && NOTE.home();
   paintWrong();
   const board = $('#board'); board.innerHTML = '';
   if (AR) { sel = new Set(D.P.map((_, i) => i)); board.hidden = true; $('#clearSel').hidden = true; paintSel(); renderLog(); renderMyCerts(); window.scrollTo(0, 0); return; }   // 전체 무작위: 고르는 칸 없음
@@ -627,7 +628,7 @@ function mcPart(s, target) {       // 보기 섞기 + 해설 번호 치환. targ
   let perm = s.sh ? shuffle(idx) : idx;
   if (s.sh && target !== undefined) { const i = perm.indexOf(s.a); [perm[i], perm[target]] = [perm[target], perm[i]]; }
   const ex = s.ex.replace(/[①-⑤]/g, c => CIRC[perm.indexOf(CIRC.indexOf(c))]);
-  return {kind: 'choice', ins: s.ins, opts: perm.map(i => s.ch[i]), ans: perm.indexOf(s.a), ex};
+  return {kind: 'choice', ins: s.ins, opts: perm.map(i => s.ch[i]), ans: perm.indexOf(s.a), ex, perm};
 }
 function buildQuestion(pi, k, bal) {
   const p = D.P[pi], it = p.items[k], where = `${D.groups[p.g].name} ${p.l}`;
@@ -781,7 +782,7 @@ function optHtml(name, opts, en, numbered, hc) {
   return `<div class="opts">${opts.map((o, i) => `<label class="opt${en ? ' en' : ''}"><input type="radio" name="${name}" value="${i}"><span>${numbered ? LAB(i) : ''}${hc ? o : rich(o)}</span></label>`).join('')}</div>`;
 }
 function newRound() {
-  cur.qs = makeRound(cur.sel);
+  cur.qs = cur.noteQs || makeRound(cur.sel);
   if (cur.review && !cur.qs.length) { renderHome(); $('#msg').textContent = '틀린 문제를 모두 맞혔습니다! 목록이 비었어요.'; window.scrollTo(0, 0); return; }
   cur.t0 = Date.now(); cur.round++;
   cur.pts = pointsFor(cur.qs.length);
@@ -820,6 +821,7 @@ function newRound() {
     box.appendChild(c);
   });
   paintEnc(box);
+  typeof NOTE !== 'undefined' && NOTE.round();
   updateSubmit(); window.scrollTo(0, 0);
 }
 // 2026-11-02 음원·그림 암호화: 문항 속 audio[data-enc]·img[data-enc](.bin)를 보일 때 받아 이 기기 열쇠로 풀어 넣는다
@@ -858,6 +860,7 @@ function grade() {
   store.set('rec2', rec);
   { const ks = Object.keys(wrongs); if (ks.length > 400) ks.sort((a, b) => wrongs[a].at < wrongs[b].at ? -1 : 1).slice(0, ks.length - 400).forEach(k => delete wrongs[k]); store.set('wrongs', wrongs); }
   $('#qs').className = 'done';
+  typeof NOTE !== 'undefined' && NOTE.graded(score);
   const N = cur.qs.length, key = cur.key;
   const entry = {at: fmtTime(new Date()), key, score, correct, n: N, sec: Math.min(3600, Math.round((Date.now() - cur.t0) / 1000)), wrong};
   log.push(entry); saveLog();
@@ -1108,5 +1111,288 @@ renderHome();
 })();
 </script>
 <script id="nkAvJs">/* 11-07 기본 캐릭터(이름 앞 그림) — nk_av_1107.py */(() => { const H = new Set([35896815,225949673,408349755,529848512,752330430,952126955,1047396351,1105170624,1637857079,1751906620,2067429836,2195918115,2218517303,2277230355,2382229619,2430518739,2664626271,2704815160,2793670335,2972654631,3103081859,3237757160,3472716697,4018683751,4240426370]); const hf = s => { let h = 2166136261; for (const c of s) h = Math.imul(h ^ c.codePointAt(0), 16777619) >>> 0; return h; }; const C = {}; const get = nn => C[nn] || (C[nn] = (async () => { const T = new TextEncoder(), S = crypto.subtle; const b = new Uint8Array(await (await fetch('/leess/nk/' + hf(nn) + '.c.bin')).arrayBuffer()); const km = await S.importKey('raw', T.encode(nn), 'PBKDF2', false, ['deriveKey']); const ky = await S.deriveKey({name: 'PBKDF2', salt: T.encode('leess-nk-1105'), iterations: 150000, hash: 'SHA-256'}, km, {name: 'AES-GCM', length: 256}, false, ['decrypt']); return URL.createObjectURL(new Blob([await S.decrypt({name: 'AES-GCM', iv: b.slice(0, 12)}, ky, b.slice(12))], {type: 'image/webp'})); })()); const css = () => { if (document.getElementById('nkAvCss')) return; const s = document.createElement('style'); s.id = 'nkAvCss'; s.textContent = '.nkC{height:2.4em;width:auto;max-width:3.6em;object-fit:contain;vertical-align:middle;margin-right:.35em;border-radius:8px}td .nkC{height:1.9em;max-width:2.8em}'; document.head.appendChild(s); }; window.nkAv = (el, n) => { const nn = String(n).normalize('NFC').trim(); if (!el || !H.has(hf(nn))) return; css(); get(nn).then(u => { for (const o of el.querySelectorAll(':scope > .nkC')) o.remove(); const i = document.createElement('img'); i.className = 'nkC'; i.src = u; i.alt = ''; el.prepend(i); }).catch(() => {}); }; for (const [e, n] of (window.nkAvQ || [])) nkAv(e, n); window.nkAvQ = []; const scan = r => { if (!r || !r.querySelectorAll) return; for (const td of r.querySelectorAll('td')) { if (td.dataset.nkc) continue; td.dataset.nkc = 1; const t = td.textContent.normalize('NFC').trim(); if (t.length > 1 && t.length < 6 && H.has(hf(t))) nkAv(td, t); } }; new MutationObserver(ms => { for (const m of ms) for (const n of m.addedNodes) if (n.nodeType === 1) scan(n.tagName === 'TD' || n.tagName === 'TR' ? n.parentNode : n); }).observe(document.documentElement, {childList: true, subtree: true}); if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => scan(document)); else scan(document); })();</script>
+<script id="noteJs">/* 시험앱 필기(2026-11-09 시제품) — 문항 카드 위 SVG 필기, 기기 IndexedDB 저장. 문항 본문은 저장하지 않고 번호·획만 저장한다.
+   훅: newRound → NOTE.round() · grade → NOTE.graded(score) · renderHome → NOTE.home() · mcPart가 perm을 돌려준다(note_patch.py). */
+var NOTE; try { NOTE = (() => {   // var + try: 여기서 오류가 나도 시험앱의 훅(typeof NOTE)이 조용히 건너뛰게
+  const DBN = 'exnote', ST = 'rounds', COL = ['#e53935', '#1e66f5'], HCOL = ['#ffd60a', '#4cd964', '#ff7ab8'], HINT = '필기는 펜슬로만 됩니다', ERASE_R = 12, TAP_PX = 6, TAP_MS = 300, MAX_SCALE = 1.5;
+  const css = document.createElement('style');
+  css.textContent = `.nt-c{position:relative}
+.nt-l{position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:2}
+.nt-l path{fill:none;stroke-linecap:round;stroke-linejoin:round;stroke-width:2.2}
+.nt-l path.hl{stroke-width:16;stroke-opacity:.38}
+#ntBar{position:sticky;top:0;z-index:30;display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:6px 0;background:var(--bg)}
+#ntBar button{padding:8px 11px;font-size:14px;line-height:1;border-radius:9px;border:1px solid var(--line);background:var(--card);color:inherit;min-height:38px;width:auto;margin:0}
+#ntBar button.on{outline:2px solid #1e66f5;outline-offset:-2px;font-weight:700}
+#ntBar .nt-dot{width:38px;padding:0;display:flex;align-items:center;justify-content:center}
+#ntBar .nt-dot i{display:block;width:18px;height:18px;border-radius:50%}
+#ntBar .nt-dot[hidden]{display:none}
+#ntSt{margin-left:auto;font-size:12px;color:var(--muted,#888);white-space:nowrap}
+body.nt-pen #qs{user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+.nt-row{display:flex;gap:6px;align-items:center;padding:9px 0;border-top:1px solid var(--line)}
+.nt-row>div{flex:1;min-width:0}.nt-row button{width:auto;padding:8px 11px;margin:0}
+#ntTools{display:flex;gap:6px;margin-top:10px}#ntTools button{width:auto;padding:8px 11px;margin:0}`;
+  document.head.appendChild(css);
+
+  /* ── 저장소 ── */
+  let dbp = null;
+  const open = () => dbp || (dbp = new Promise((ok, no) => {
+    const r = indexedDB.open(DBN, 1);
+    r.onupgradeneeded = () => r.result.createObjectStore(ST, {keyPath: 'id'}).createIndex('salt', 'salt');
+    r.onsuccess = () => ok(r.result); r.onerror = () => no(r.error);
+  }));
+  async function tx(mode, f) {
+    const d = await open();
+    return new Promise((ok, no) => { const t = d.transaction(ST, mode), rq = f(t.objectStore(ST)); let out; if (rq) rq.onsuccess = () => { out = rq.result; }; t.oncomplete = () => ok(out); t.onerror = t.onabort = () => no(t.error); });
+  }
+  const listAll = () => tx('readonly', s => s.index('salt').getAll(D.salt));
+
+  /* ── 문항 번호: 은행을 다시 합쳐도 변하지 않게 내용으로(해설은 빼고) ── */
+  function itemHash(it) {
+    const s = JSON.stringify(it, (k, v) => k === 'ex' ? undefined : v); let a = 2166136261, b = 5381;
+    for (let i = 0; i < s.length; i++) { const c = s.charCodeAt(i); a = Math.imul(a ^ c, 16777619); b = (Math.imul(b, 33) + c) | 0; }
+    return (a >>> 0).toString(36) + (b >>> 0).toString(36);
+  }
+
+  /* ── 상태 ── */
+  let R = null, cards = [], mode = 'pen', pc = 0, hc = 0, undo = [], act = null, timer = 0, stored = false, blockClick = 0, synth = false;
+  const byEl = new Map(), penOn = v => document.body.classList.toggle('nt-pen', v);   // 펜으로 긋는 동안만 글자 선택을 막는다
+  const strokes = () => R ? R.qs.reduce((n, q) => n + q.s.length, 0) : 0;
+  const setSt = t => { const e = document.getElementById('ntSt'); if (e) e.textContent = t || HINT; };
+
+  async function flush() {
+    if (!timer) return; clearTimeout(timer); timer = 0;
+    const rec = R; if (!rec) return;
+    try {
+      if (strokes()) { await tx('readwrite', s => s.put(rec)); stored = true; setSt('저장됨'); }
+      else if (stored) { await tx('readwrite', s => s.delete(rec.id)); stored = false; setSt(''); }
+    } catch (e) { setSt('저장 실패 — 공간을 확인하세요'); }
+  }
+  function save() { setSt('저장 중…'); clearTimeout(timer); timer = setTimeout(flush, 400); }
+  addEventListener('pagehide', flush);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) flush(); });
+
+  /* ── 필기층 ── */
+  const NSV = 'http://www.w3.org/2000/svg';
+  const kids = c => [...c.el.children].filter(x => x !== c.svg);
+  const scaleOf = c => (c.el.getBoundingClientRect().width / c.el.offsetWidth) || 1;
+  function fit(c) {   // 필기한 뒤 폭이 바뀌면(화면 회전·다른 기기) 필기 때 폭으로 그리고 비율만 맞춘다
+    const W = c.q.w, el = c.el, pw = el.parentElement.clientWidth;
+    if (!W || Math.abs(pw - W) < 1) { el.style.width = el.style.transform = el.style.transformOrigin = el.style.marginBottom = el.style.marginLeft = ''; return; }
+    const s = Math.min(pw / W, MAX_SCALE); el.style.boxSizing = 'border-box'; el.style.width = W + 'px'; el.style.transformOrigin = '0 0'; el.style.transform = `scale(${s})`;
+    el.style.marginLeft = ((pw - W * s) / 2) + 'px'; el.style.marginBottom = (14 + el.offsetHeight * (s - 1)) + 'px';
+  }
+  function anchor(c, y) {   // 획은 카드의 직계 자식(지문·보기 칸) 하나에 묶는다 — 채점 뒤 해설이 들어와도 함께 움직인다
+    const ks = kids(c), t = c.svg.getBoundingClientRect().top, s = scaleOf(c);
+    for (let i = 0; i < ks.length; i++) { const r = ks[i].getBoundingClientRect(); if (y <= (r.bottom - t) / s) return [i, (r.top - t) / s]; }
+    const l = ks.length - 1; return [l, (ks[l].getBoundingClientRect().top - t) / s];
+  }
+  function paint(c) {
+    const ks = kids(c), t = c.svg.getBoundingClientRect().top, s = scaleOf(c);
+    c.dy = c.q.s.map((st, i) => { const k = ks[st.a], dy = k ? Math.round((k.getBoundingClientRect().top - t) / s - st.ay) : 0, p = c.svg.children[i]; if (p) { if (dy) p.setAttribute('transform', `translate(0 ${dy})`); else p.removeAttribute('transform'); } return dy; });
+  }
+  function dOf(p) {
+    let x = p[0] / 2, y = p[1] / 2, d = `M${x} ${y}`; if (p.length <= 2) return d + 'l.01 0';
+    for (let i = 2; i + 1 < p.length; i += 2) { const nx = x + p[i] / 2, ny = y + p[i + 1] / 2; d += `Q${x} ${y} ${(x + nx) / 2} ${(y + ny) / 2}`; x = nx; y = ny; }
+    return d + `L${x} ${y}`;
+  }
+  function pathEl(st) { const p = document.createElementNS(NSV, 'path'); if (st.h) p.setAttribute('class', 'hl'); p.setAttribute('stroke', (st.h ? HCOL : COL)[st.c] || COL[0]); p.setAttribute('d', dOf(st.p)); return p; }
+  function draw(c) { c.svg.textContent = ''; c.q.s.forEach(st => c.svg.appendChild(pathEl(st))); paint(c); }
+  const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(es => es.forEach(e => { const c = byEl.get(e.target); if (c) { if (c.q.w) c.el.style.marginBottom && fit(c); paint(c); } })) : null;
+  let lastW = 0;
+  const widthRo = typeof ResizeObserver === 'function' ? new ResizeObserver(() => { const w = document.querySelector('#qs').clientWidth; if (w !== lastW) { lastW = w; cards.forEach(c => { fit(c); paint(c); }); } }) : null;
+  widthRo && widthRo.observe(document.querySelector('#qs'));
+  addEventListener('resize', () => cards.forEach(c => { fit(c); paint(c); }));
+
+  function mount(idx) {
+    ro && ro.disconnect(); byEl.clear();
+    cards = [...document.querySelector('#qs').children].map((el, i) => {
+      el.classList.add('nt-c');
+      const svg = document.createElementNS(NSV, 'svg'); svg.setAttribute('class', 'nt-l'); el.appendChild(svg);
+      const c = {el, svg, q: R.qs[idx ? idx[i] : i], dy: []}; byEl.set(el, c); return c;
+    });
+    cards.forEach(c => { fit(c); draw(c); ro && ro.observe(c.el); });
+  }
+
+  /* ── 입력 ── */
+  const qs = document.querySelector('#qs');
+  function xy(c, e) { const r = c.svg.getBoundingClientRect(), s = scaleOf(c); return [(e.clientX - r.left) / s, (e.clientY - r.top) / s]; }
+  function eraseAt(c, x, y) {
+    let hit = false;
+    for (let i = c.q.s.length - 1; i >= 0; i--) {
+      const st = c.q.s[i], dy = c.dy[i] || 0; let px = st.p[0] / 2, py = st.p[1] / 2 + dy, on = Math.hypot(px - x, py - y) < ERASE_R;
+      for (let j = 2; !on && j + 1 < st.p.length; j += 2) { px += st.p[j] / 2; py += st.p[j + 1] / 2; on = Math.hypot(px - x, py - y) < ERASE_R; }
+      if (on) { c.q.s.splice(i, 1); undo.push({t: 'del', c, st, i}); hit = true; }
+    }
+    if (hit) { draw(c); save(); } return hit;
+  }
+  function discard() { if (act && act.path) act.path.remove(); act = null; penOn(false); }
+  function addPoint(e) {
+    const a = act, [x, y] = xy(a.c, e), X = Math.round(x * 2), Y = Math.round(y * 2);
+    a.dist = Math.max(a.dist, Math.hypot(e.clientX - a.cx, e.clientY - a.cy));
+    if (a.erase) { if (eraseAt(a.c, x, y)) a.hit = true; return; }
+    const dx = X - a.lx, dy = Y - a.ly; if (dx * dx + dy * dy < 4) return;
+    const px = a.lx / 2, py = a.ly / 2, nx = X / 2, ny = Y / 2;
+    a.st.p.push(dx, dy); a.lx = X; a.ly = Y; a.body += `Q${px} ${py} ${(px + nx) / 2} ${(py + ny) / 2}`; a.path.setAttribute('d', a.body + `L${nx} ${ny}`);
+  }
+  function passTap(cx, cy) {   // 짧게 누르면 필기 대신 아래 보기를 누른다
+    const t = document.elementFromPoint(cx, cy); if (!t) return; synth = true; try { t.click(); } finally { synth = false; }
+  }
+  qs.addEventListener('pointerdown', e => {
+    if (e.pointerType !== 'pen' || act || !R) return;                  // 필기는 펜슬만 — 손가락·마우스는 화면 넘기기·단어 선택 그대로
+    if (e.target.closest('input[type=text],audio,button,a')) return;
+    const el = e.target.closest('.card.q'), c = el && byEl.get(el); if (!c) return;
+    const [x, y] = xy(c, e), X = Math.round(x * 2), Y = Math.round(y * 2), erase = mode === 'erase';
+    act = {id: e.pointerId, type: e.pointerType, c, cx: e.clientX, cy: e.clientY, t: Date.now(), dist: 0, erase, hit: false, lx: X, ly: Y};
+    if (erase) { if (eraseAt(c, x, y)) act.hit = true; }
+    else {
+      const [a, ay] = anchor(c, y), hl = mode === 'hl'; act.st = {c: hl ? hc : pc, a, ay: Math.round(ay), p: [X, Y]}; if (hl) act.st.h = 1;
+      act.body = `M${X / 2} ${Y / 2}`; act.path = pathEl(act.st); c.svg.appendChild(act.path);
+    }
+    penOn(true); const sel = getSelection(); if (sel && !sel.isCollapsed) sel.removeAllRanges();
+    try { qs.setPointerCapture(e.pointerId); } catch (x2) {}
+    e.preventDefault();
+  }, true);
+  qs.addEventListener('pointermove', e => {
+    if (!act || e.pointerId !== act.id) return;
+    const ev = e.getCoalescedEvents ? e.getCoalescedEvents() : []; (ev.length ? ev : [e]).forEach(addPoint);
+  }, true);
+  qs.addEventListener('pointerup', e => {
+    if (!act || e.pointerId !== act.id) return;
+    const a = act, tap = a.dist < TAP_PX && Date.now() - a.t < TAP_MS; penOn(false);
+    blockClick = Date.now() + 400;
+    if (a.erase) { act = null; if (tap && !a.hit) passTap(e.clientX, e.clientY); return; }
+    if (tap) { discard(); passTap(e.clientX, e.clientY); return; }
+    act = null; const c = a.c;
+    if (!c.q.w) c.q.w = c.el.offsetWidth;
+    c.q.s.push(a.st); undo.push({t: 'add', c, st: a.st}); paint(c); save();
+    if (navigator.storage && navigator.storage.persist && strokes() === 1) navigator.storage.persist().catch(() => {});
+  }, true);
+  qs.addEventListener('pointercancel', e => { if (act && e.pointerId === act.id) discard(); }, true);
+  qs.addEventListener('click', e => { if (!synth && Date.now() < blockClick) { e.preventDefault(); e.stopPropagation(); } }, true);
+  // 손가락은 브라우저가 그대로 처리한다(넘기기·확대·길게 눌러 단어 선택 → 찾아보기). 막는 것은 펜으로 긋는 동안의 넘김·손바닥뿐.
+  qs.addEventListener('touchstart', e => { if (act) e.preventDefault(); }, {passive: false});
+  qs.addEventListener('touchmove', e => { if (act) e.preventDefault(); }, {passive: false});
+
+  /* ── 도구 막대 ── */
+  function setMode(m) { mode = m; paintBar(); }
+  function paintBar() {   // 도구는 펜·형광펜·지우개 가운데 하나가 늘 켜져 있고, 색 단추는 켜진 도구 것만 보인다
+    const b = document.getElementById('ntBar'); if (!b) return;
+    ['pen', 'hl', 'erase'].forEach(a => b.querySelector(`[data-a=${a}]`).classList.toggle('on', mode === a));
+    b.querySelectorAll('.nt-dot').forEach(d => { d.hidden = d.dataset.t !== mode; d.classList.toggle('on', +d.dataset.c === (d.dataset.t === 'hl' ? hc : pc)); });
+  }
+  function bar() {
+    if (document.getElementById('ntBar')) return;
+    const b = document.createElement('div'); b.id = 'ntBar';
+    b.innerHTML = `<button data-a="pen" type="button">🖊 펜</button><button data-a="hl" type="button">🖍 형광펜</button><button data-a="erase" type="button">지우개</button>${[['pen', COL, '펜'], ['hl', HCOL, '형광펜']].map(([t, cs, nm]) => cs.map((c, i) => `<button class="nt-dot" data-t="${t}" data-c="${i}" type="button" aria-label="${nm} 색 ${i + 1}"><i style="background:${c}"></i></button>`).join('')).join('')}<button data-a="undo" type="button" aria-label="되돌리기">↩</button><span id="ntSt">${HINT}</span>`;
+    qs.before(b); paintBar();
+    b.onclick = e => {
+      const t = e.target.closest('button'); if (!t) return;
+      if (t.dataset.c) { if (t.dataset.t === 'hl') hc = +t.dataset.c; else pc = +t.dataset.c; paintBar(); return; }
+      const a = t.dataset.a;
+      if (a === 'undo') { const u = undo.pop(); if (!u) return; if (u.t === 'add') u.c.q.s.splice(u.c.q.s.indexOf(u.st), 1); else u.c.q.s.splice(u.i, 0, u.st); draw(u.c); save(); return; }
+      setMode(a);
+    };
+  }
+
+  /* ── 다시 보기 ── */
+  function applyPerm(pt, saved) {   // 필기할 때의 보기 순서로 되돌린다
+    if (!pt.perm || !saved) return; const ch = []; pt.perm.forEach((o, i) => { ch[o] = pt.opts[i]; });
+    const old = pt.perm;
+    pt.ex = (pt.ex || '').replace(/[①-⑤]/g, c => { const o = old[CIRC.indexOf(c)]; return o === undefined ? c : CIRC[saved.indexOf(o)]; });
+    pt.ans = saved.indexOf(old[pt.ans]); pt.opts = saved.map(o => ch[o]); pt.perm = saved;
+  }
+  function rebuild(rec) {
+    const out = [], idx = [];
+    rec.qs.forEach((n, i) => {
+      const pi = PID.get(n.pid); if (pi === undefined) return; const items = D.P[pi].items || []; let k = n.k;
+      if (!items[k] || itemHash(items[k]) !== n.h) { k = items.findIndex(it => itemHash(it) === n.h); if (k < 0) return; }
+      const q = buildQuestion(pi, k); q.parts.forEach((pt, j) => applyPerm(pt, n.perm && n.perm[j])); out.push(q); idx.push(i);
+    });
+    return {qs: out, idx};
+  }
+  function reveal(rec, idx) {
+    const box = qs, list = [...box.children];
+    cur.qs.forEach((q, i) => {
+      const el = list[i], ans = rec.ans ? rec.ans[idx[i]] : null; el.querySelectorAll('input').forEach(x => { x.disabled = true; });
+      if (!ans) return; let all = true;
+      q.parts.forEach((pt, j) => {
+        const sub = el.querySelector(`.subq[data-j="${j}"]`), v = ans[j]; let ok;
+        if (pt.kind === 'text') {
+          ok = String(pt.ans).split(' 또는 ').some(x => normAns(v) === normAns(x)); const inp = sub.querySelector('input'); inp.value = v || ''; inp.classList.add(ok ? 'right' : 'wrong');
+          if (!ok) sub.insertAdjacentHTML('beforeend', `<div class="muted">정답: <b class="okc">${esc(pt.ans)}</b></div>`);
+        } else { ok = v === pt.ans; sub.querySelectorAll('.opt').forEach((l, li) => { if (li === pt.ans) l.classList.add('right'); else if (li === v) l.classList.add('wrong'); if (li === v) l.querySelector('input').checked = true; }); }
+        if (pt.ex) sub.insertAdjacentHTML('beforeend', `<div class="ex">${pt.hc ? pt.ex : esc(pt.ex)}</div>`);
+        if (!ok) all = false;
+      });
+      const m = el.querySelector('.mark'); if (m) { m.textContent = all ? '정답' : '오답'; m.className = 'mark ' + (all ? 'o' : 'x'); }
+    });
+    if (rec.ans) box.className = 'done';
+  }
+  async function openRec(rec, msg) {
+    if (typeof UNLOCK !== 'undefined') { const u = await UNLOCK.run(D, {}, KEYST); if (!u.ok) { msg('이 기기에 문항 열쇠가 없습니다. 시험을 한 번 시작한 뒤 다시 여세요.'); return; } }
+    const {qs: list, idx} = rebuild(rec);
+    if (!list.length) { msg('이 회차의 문항이 문제은행에서 바뀌어 열 수 없습니다.'); return; }
+    cur = {sel: new Set(), key: rec.label, name: '', seen: new Set(), round: 0, review: false, noteQs: list, noteRec: rec, noteIdx: idx};
+    document.querySelector('#home').hidden = true; document.querySelector('#test').hidden = false; newRound();
+    if (list.length < rec.qs.length) setSt(`바뀐 문항 ${rec.qs.length - list.length}개 제외`);
+  }
+
+  /* ── 앱 훅 ── */
+  function round() {
+    flush(); bar(); undo = []; discard(); setSt(''); stored = false;
+    if (cur.noteRec) {
+      R = cur.noteRec; stored = true; mount(cur.noteIdx); reveal(R, cur.noteIdx);
+      document.querySelector('#tTry').textContent = `${R.at} · 내 필기`;
+      document.querySelector('#submit').hidden = true;
+      const n = document.querySelector('#next'); n.hidden = false; n.textContent = '내 필기 목록으로'; n.onclick = () => { flush(); renderHome(); window.scrollTo(0, 0); };
+      cards.forEach(c => { fit(c); paint(c); });
+      return;
+    }
+    R = {id: D.salt + ':' + Date.now(), salt: D.salt, ts: Date.now(), at: fmtTime(new Date()), label: cur.key, graded: false, score: null, n: cur.qs.length,
+      qs: cur.qs.map(q => ({pid: D.P[q.pi].id, k: q.k, h: itemHash(D.P[q.pi].items[q.k]), perm: q.parts.map(p => p.perm || null), w: 0, s: []}))};
+    mount(null);
+  }
+  function graded(score) { if (!R || cur.noteRec) return; R.graded = true; R.score = score; R.ans = cur.ansd.map(a => a.slice()); cards.forEach(c => paint(c)); if (strokes()) save(); }
+
+  async function home() {
+    await flush(); R = null; cards = []; discard();
+    let box = document.getElementById('ntCard');
+    if (!box) { const b = document.querySelector('#board'); if (!b) return; box = document.createElement('div'); box.id = 'ntCard'; box.className = 'card'; b.before(box); }
+    let list = []; try { list = await listAll(); } catch (e) { box.hidden = true; return; }
+    list.sort((a, b) => b.ts - a.ts);
+    box.hidden = false;
+    box.innerHTML = `<div class="row" style="justify-content:space-between;align-items:center"><b>내 필기 ${list.length}회차</b><button type="button" class="ghost" id="ntOpen">${box.dataset.open ? '접기' : '보기'}</button></div><div id="ntList"${box.dataset.open ? '' : ' hidden'}>
+      ${list.map((r, i) => `<div class="nt-row"><div><b>${esc(r.label)}</b><div class="muted">${esc(r.at)} · ${r.graded ? esc(r.score) + '점' : '채점 전'} · 필기 ${r.qs.filter(q => q.s.length).length}문항</div></div><button type="button" data-o="${i}">열기</button><button type="button" class="ghost" data-d="${i}">삭제</button></div>`).join('') || '<p class="muted">시험 화면에서 펜슬로 쓰면 여기에 저장됩니다(펜·형광펜·지우개).</p>'}
+      <p class="muted" id="ntMsg" style="margin:8px 0 0"></p>
+      <div id="ntTools"><button type="button" class="ghost" id="ntExp">파일로 내보내기</button><button type="button" class="ghost" id="ntImp">가져오기</button><input type="file" id="ntFile" accept=".json,application/json" hidden></div></div>`;
+    const msg = t => { box.querySelector('#ntMsg').textContent = t; };
+    box.querySelector('#ntOpen').onclick = () => { if (box.dataset.open) delete box.dataset.open; else box.dataset.open = '1'; home(); };
+    box.querySelectorAll('[data-o]').forEach(b => b.onclick = () => openRec(list[+b.dataset.o], msg));
+    box.querySelectorAll('[data-d]').forEach(b => b.onclick = async () => { if (!confirm('이 회차의 필기를 지울까요? 되돌릴 수 없습니다.')) return; await tx('readwrite', s => s.delete(list[+b.dataset.d].id)); home(); });
+    box.querySelector('#ntExp').onclick = () => exportFile(list, msg);
+    const f = box.querySelector('#ntFile'); box.querySelector('#ntImp').onclick = () => f.click();
+    f.onchange = async () => { const file = f.files[0]; if (!file) return; msg(await importFile(file)); setTimeout(home, 900); };
+  }
+  async function exportFile(list, msg) {
+    if (!list.length) { msg('내보낼 필기가 없습니다.'); return; }
+    const name = `필기_${D.salt}_${new Date().toISOString().slice(0, 10)}.json`, json = JSON.stringify({v: 1, salt: D.salt, rounds: list}), file = new File([json], name, {type: 'application/json'});
+    if (navigator.canShare && navigator.canShare({files: [file]})) { try { await navigator.share({files: [file]}); return; } catch (e) { if (e.name === 'AbortError') return; } }
+    const u = URL.createObjectURL(file), a = document.createElement('a'); a.href = u; a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(u), 5000); msg('파일을 내려받았습니다.');
+  }
+  function validRound(r) { return r && typeof r.id === 'string' && r.salt === D.salt && Array.isArray(r.qs) && r.qs.every(q => q && Array.isArray(q.s) && q.s.every(s => s && Array.isArray(s.p) && s.p.every(Number.isFinite))); }
+  async function importFile(file) {
+    if (file.size > 20e6) return '파일이 너무 큽니다.';
+    let o; try { o = JSON.parse(await file.text()); } catch (e) { return '필기 파일이 아닙니다.'; }
+    if (!o || o.v !== 1 || o.salt !== D.salt || !Array.isArray(o.rounds)) return '이 시험앱의 필기 파일이 아닙니다.';
+    const ok = o.rounds.filter(validRound); await tx('readwrite', s => { ok.forEach(r => s.put(r)); });
+    return `${ok.length}회차를 가져왔습니다.`;
+  }
+
+  // 필기에서 난 오류가 시험(새 회차·채점·첫 화면)을 멈추지 않게 감싼다
+  const safe = f => (...a) => { try { const r = f(...a); if (r && r.catch) r.catch(e => console.warn('필기', e)); return r; } catch (e) { console.warn('필기', e); } };
+  if (!document.querySelector('#home').hidden) safe(home)();
+  return {round: safe(round), graded: safe(graded), home: safe(home), _dump: listAll};
+})(); } catch (e) { NOTE = undefined; console.warn('필기 사용 불가', e); }
+</script>
 </body>
 </html>
