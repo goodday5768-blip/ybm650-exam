@@ -9,45 +9,57 @@
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#121418;--card:#1b1e24;--ink:#e6e8ee;--mute:#9aa1b0;--line:#2c313a;--acc:#7da2f0;--acc2:#1f2a40;--ok:#4cc27f;--okb:#183325;--ng:#ef7d70;--ngb:#3a1d1a;--sh:none}}
 :root[data-theme="dark"]{--bg:#121418;--card:#1b1e24;--ink:#e6e8ee;--mute:#9aa1b0;--line:#2c313a;--acc:#7da2f0;--acc2:#1f2a40;--ok:#4cc27f;--okb:#183325;--ng:#ef7d70;--ngb:#3a1d1a;--sh:none}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 -apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif}
+body{margin:0;background:var(--bg);color:var(--ink);font:calc(15px*var(--fz,1))/1.55 -apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif}
 .wrap{max-width:900px;margin:0 auto;padding:12px 16px 80px}
-h1{font-size:22px;margin:8px 0 2px}
-.sub{color:var(--mute);font-size:13px;margin:0 0 14px}
-.note{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px;font-size:14px;margin-bottom:14px}
+h1{font-size:calc(22px*var(--fz,1));margin:8px 0 2px}
+.sub{color:var(--mute);font-size:calc(13px*var(--fz,1));margin:0 0 14px}
+.note{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px;font-size:calc(14px*var(--fz,1));margin-bottom:14px}
 .part{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:6px 0;margin:0 0 12px;box-shadow:var(--sh)}
-.part h2{font-size:15px;margin:6px 14px 4px;color:var(--acc)}
+.part h2{font-size:calc(15px*var(--fz,1));margin:6px 14px 4px;color:var(--acc)}
 .deck{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:none;border:0;border-top:1px solid var(--line);padding:11px 14px;color:var(--ink);font:inherit;cursor:pointer}
 .deck:first-of-type{border-top:0}
 .deck .t{flex:1}
-.deck .m{color:var(--mute);font-size:12px;white-space:nowrap}
+.deck .m{color:var(--mute);font-size:calc(12px*var(--fz,1));white-space:nowrap}
 .deck .bar{width:54px;height:6px;border-radius:3px;background:var(--line);overflow:hidden}
 .deck .bar i{display:block;height:100%;background:var(--ok)}
 .top{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--line);padding:8px 0;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.top .t{flex:1;font-weight:700;font-size:15px;min-width:150px}
-.btn{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:9px;padding:6px 11px;font:inherit;font-size:13px;cursor:pointer}
+.top .t{flex:1;font-weight:700;font-size:calc(15px*var(--fz,1));min-width:150px}
+.btn{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:9px;padding:6px 11px;font:inherit;font-size:calc(13px*var(--fz,1));cursor:pointer}
 .btn.pri{background:var(--acc);border-color:var(--acc);color:#fff}
-.score{font-size:13px;color:var(--mute)}
+.score{font-size:calc(13px*var(--fz,1));color:var(--mute)}
 .card{background:var(--card);border:1px solid var(--line);border-radius:12px;margin:14px 0;overflow:hidden;box-shadow:var(--sh)}
 .sl{position:relative;width:100%;background:#fff}
 .sl img{display:block;width:100%;height:auto}
 .sl .ov{position:absolute;display:none}
 .card.show .sl .ov{display:block}
-.meta{display:flex;align-items:center;gap:8px;padding:8px 12px;font-size:12px;color:var(--mute);border-top:1px solid var(--line);flex-wrap:wrap}
+.meta{display:flex;align-items:center;gap:8px;padding:8px 12px;font-size:calc(12px*var(--fz,1));color:var(--mute);border-top:1px solid var(--line);flex-wrap:wrap}
 .meta .sp{flex:1}
 audio{width:100%;display:block;margin:0;padding:6px 12px 0}
 .qrow{padding:8px 12px;border-top:1px dashed var(--line)}
-.qrow .lab{font-size:13px;font-weight:700;margin-right:6px}
-.ch{display:inline-block;min-width:46px;margin:3px 4px 3px 0;padding:6px 10px;border:1px solid var(--line);border-radius:9px;background:var(--card);color:var(--ink);font:inherit;font-size:14px;cursor:pointer}
+.qrow .lab{font-size:calc(13px*var(--fz,1));font-weight:700;margin-right:6px}
+.ch{display:inline-block;min-width:46px;margin:3px 4px 3px 0;padding:6px 10px;border:1px solid var(--line);border-radius:9px;background:var(--card);color:var(--ink);font:inherit;font-size:calc(14px*var(--fz,1));cursor:pointer}
 .ch.sel{background:var(--acc2);border-color:var(--acc);color:var(--acc);font-weight:700}
 .ch.ok{background:var(--okb);border-color:var(--ok);color:var(--ok);font-weight:700}
 .ch.ng{background:var(--ngb);border-color:var(--ng);color:var(--ng)}
-.ex{white-space:pre-line;font-size:13.5px;margin:8px 0 2px;padding:9px 11px;border-left:3px solid var(--acc);background:var(--acc2);border-radius:0 8px 8px 0;display:none}
+.ex{white-space:pre-line;font-size:calc(13.5px*var(--fz,1));margin:8px 0 2px;padding:9px 11px;border-left:3px solid var(--acc);background:var(--acc2);border-radius:0 8px 8px 0;display:none}
 .card.show .ex,.qrow.done .ex{display:block}
-.res{font-size:13px;font-weight:700;margin-left:4px}
+.res{font-size:calc(13px*var(--fz,1));font-weight:700;margin-left:4px}
 .nav{display:flex;gap:8px;justify-content:space-between;margin-top:18px}
 .hidden{display:none}
 </style>
-<!--LEESS-GATE2--><script src="/leess/roster.js"></script><script src="/leess/gate.js"></script></head>
+<!--LEESS-GATE2--><script src="/leess/roster.js"></script><script src="/leess/gate.js"></script><style id="ipadCss">
+/* 아이패드 기준 화면(2026-11-09) — 폭 740px 이상(아이패드 세로·가로, 컴퓨터)에서 본문 폭을 넓히고 글자를 키운다. 휴대폰은 그대로. */
+@media (min-width:740px) and (min-height:560px){
+:root{--fz:1.22}
+.wrap{max-width:1100px!important}
+.wrap{padding-left:26px!important;padding-right:26px!important}
+.brand img{max-width:640px!important}
+input[type=radio],input[type=checkbox]{width:19px;height:19px}
+.lock,.gate{max-width:600px!important}
+#pwaSheet .pwa-box{max-width:620px!important}
+}
+</style>
+</head>
 <body>
 <div class="wrap" id="app"></div>
 <script>
@@ -253,8 +265,8 @@ function renderLocked() {
   $('#app').innerHTML = `<h1>${esc(D.title)}</h1><p class="sub">${esc(D.sub || '')}</p>
   <div class="note"><b>워크북 열기</b><p style="margin:6px 0 10px">본인 이름(실명)을 쓰고 「워크북 열기」를 누르세요. 처음 쓰는 기기는 인터넷 연결이 필요합니다.</p>
   <input type="text" id="name" placeholder="이름 (필수)" autocomplete="off" value="${esc(saved)}" style="width:100%;font:inherit;padding:9px 11px;border:1px solid var(--line);border-radius:9px;background:var(--card);color:var(--ink)">
-  <div id="consentCard" hidden style="margin-top:10px;font-size:13.5px;line-height:1.6"><b>개인정보 수집·이용 동의</b><p style="margin:6px 0 8px">${D.consent || ''}</p><button class="btn pri" id="consentOk">동의하고 열기</button> <button class="btn" id="consentNo">동의하지 않음</button></div>
-  <p id="msg" style="color:var(--ng);font-size:14px;min-height:1.4em;margin:8px 0"></p>
+  <div id="consentCard" hidden style="margin-top:10px;font-size:calc(13.5px*var(--fz,1));line-height:1.6"><b>개인정보 수집·이용 동의</b><p style="margin:6px 0 8px">${D.consent || ''}</p><button class="btn pri" id="consentOk">동의하고 열기</button> <button class="btn" id="consentNo">동의하지 않음</button></div>
+  <p id="msg" style="color:var(--ng);font-size:calc(14px*var(--fz,1));min-height:1.4em;margin:8px 0"></p>
   <button class="btn pri" id="openWb" style="width:100%;padding:10px">워크북 열기</button></div>`;
   $('#openWb').onclick = openWb;
   $('#consentOk').onclick = () => { if (!nameOk()) return; exst.set('consent', fmtTime(new Date())); $('#consentCard').hidden = true; openWb(); };
