@@ -923,5 +923,57 @@ body.ink-top{border-top:var(--ink-h,0px) solid transparent}
   load().then(sync);
 })();
 </script>
+<script id="tdevJs">
+/* 선생님 기기 자동 등록(2026-11-10 사용자: 아이패드가 앱마다 「다른 학생 이름으로 등록」으로 막힘 → 「모든 앱을 고쳐」).
+   기기ID는 앱·홈 화면 앱마다 따로 생긴다. 이 브라우저에 선생님 코드가 있으면 저장소의 모든 기기ID를 서버(tdev)에 등록해 이름 잠금·경고에서 뺀다.
+   코드가 없는 기기는 이름 칸에 선생님 코드를 한 번 치면 등록된다(코드는 서버가 확인, 화면·주소에 남기지 않는다). tdev_all.py가 게시 때마다 끼운다. */
+(function () {
+  var U = 'https://script.google.com/macros/s/AKfycbyKGf4h-cdSKteg8QPTjZTvUVsbowp4S0WvaRuyzjFq4Xwm1nc9mOKl70P0tqKzyOKm/exec', RX = /^[A-Za-z0-9.-]{3,40}$/, busy = false, tries = 0, bad = {};
+  function val(k) { var v = null; try { v = localStorage.getItem(k); v = JSON.parse(v); } catch (e) {} return typeof v === 'string' ? v : ''; }
+  function keys(re) { var a = []; try { for (var i = 0; i < localStorage.length; i++) { var k = localStorage.key(i); if (re.test(k)) a.push(k); } } catch (e) {} return a; }
+  function ids() { var a = []; keys(/(^|:)device$/).forEach(function (k) { var v = val(k); if (RX.test(v) && a.indexOf(v) < 0) a.push(v); }); return a.sort(); }
+  function codes() { var a = []; ['leess:tcode'].concat(keys(/(^|:)tcode$/)).forEach(function (k) { var v = val(k); if (v && a.indexOf(v) < 0) a.push(v); }); return a; }
+  function post(code, devs) {
+    return fetch(U, {method: 'POST', headers: {'Content-Type': 'text/plain;charset=utf-8'}, body: JSON.stringify({event: 'tdev', code: code, devs: devs})})
+      .then(function (r) { return r.text(); }).then(function (t) { try { return !!JSON.parse(t).ok; } catch (e) { return false; } }).catch(function () { return null; });
+  }
+  function sync(codeIn) {   // true = 등록됨
+    var devs = ids(), sig = devs.join(',');
+    if (!devs.length || busy) return Promise.resolve(false);
+    var cs = codeIn ? [codeIn] : codes().filter(function (c) { return bad[c] !== sig; });
+    if (!cs.length) return Promise.resolve(false);
+    if (!codeIn && val('leess:tcode') && localStorage.getItem('leess:tdevs') === sig) return Promise.resolve(true);
+    busy = true;
+    var i = 0;
+    function next() {
+      if (i >= cs.length) return false;
+      var c = cs[i++];
+      return post(c, devs).then(function (ok) {
+        if (ok) { try { localStorage.setItem('leess:tdevs', sig); localStorage.setItem('leess:tcode', JSON.stringify(c)); } catch (e) {} return true; }
+        if (ok === false) bad[c] = sig;
+        return next();
+      });
+    }
+    return Promise.resolve(next()).then(function (r) { busy = false; return r; }, function () { busy = false; return false; });
+  }
+  var t1 = 0, t2 = 0;
+  function later() { clearTimeout(t1); t1 = setTimeout(function () { sync(); }, 900); }
+  function isName(el) { return el && el.tagName === 'INPUT' && (el.id === 'name' || /이름/.test(el.getAttribute('placeholder') || '')); }
+  document.addEventListener('input', function (e) {   // 이름 칸에 선생님 코드를 치면 등록
+    var el = e.target; if (!isName(el)) return;
+    clearTimeout(t2);
+    t2 = setTimeout(function () {
+      var v = (el.value || '').trim();
+      if (!/^[!-~]{4,40}$/.test(v) || tries >= 6) return;
+      tries++;
+      sync(v).then(function (ok) { if (ok && (el.value || '').trim() === v) { el.value = ''; try { el.dispatchEvent(new Event('input', {bubbles: true})); } catch (e) {} alert('선생님 기기로 등록했습니다. 이제 학생 이름으로 들어가시면 됩니다.'); } });
+    }, 700);
+  }, true);
+  document.addEventListener('click', later, true);   // 앱 안에서 코드를 넣은 직후(일곱 번 누르기 등)에도 바로 등록
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) later(); });
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', later); else later();
+  setTimeout(function () { sync(); }, 3000);
+})();
+</script>
 </body>
 </html>
