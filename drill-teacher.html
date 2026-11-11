@@ -12,7 +12,7 @@
   --warn:#b45309; --warn2:#fffbeb;
 }
 *{box-sizing:border-box}
-html,body{margin:0;padding:0}
+html,body{margin:0;padding:0;overscroll-behavior-y:contain}   /* 당겨서 새로 고침을 막는다(시험 중 실수로 새로 고침 → 이탈) */
 body{background:var(--bg);color:var(--ink);font-family:'Malgun Gothic','Apple SD Gothic Neo',-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
   font-size:calc(16px*var(--fz,1));line-height:1.6;-webkit-text-size-adjust:100%}
 .wrap{max-width:720px;margin:0 auto;padding:16px 16px 120px}
@@ -84,6 +84,24 @@ a.link{color:var(--acc);font-size:calc(13px*var(--fz,1));cursor:pointer;text-dec
 .kpi{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
 .kpi div{flex:1;min-width:84px;background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:8px 10px;text-align:center;font-size:calc(13px*var(--fz,1))}
 .kpi b{display:block;font-size:calc(22px*var(--fz,1))}
+/* 이탈 방지(2026-11-11): 시험 화면은 글자를 고를 수 없고, 화면을 벗어난 동안에는 문제를 가린다 */
+#quiz{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+body.away #qs{visibility:hidden}
+.guardline{font-size:calc(12.5px*var(--fz,1));color:var(--dim)}
+.guardline.hot{color:var(--no);font-weight:700}
+#cover{position:fixed;inset:0;z-index:20;background:#0f172a;color:#fff;display:flex;align-items:center;
+  justify-content:center;padding:24px;text-align:center}
+#cover .in{max-width:440px}
+#cover .t{display:block;font-size:calc(22px*var(--fz,1));font-weight:800;margin-bottom:10px}
+#cover p{margin:8px 0;font-size:calc(16px*var(--fz,1));color:#e2e8f0}
+#cover p b{color:#fde68a}
+#cover button{margin-top:16px;width:100%}
+#cover button.ghost{margin-top:8px;background:transparent;color:#cbd5e1;border-color:#475569}
+label.pledge{display:flex;gap:10px;align-items:flex-start;padding:11px 12px;border:1px solid var(--line);border-radius:10px;
+  background:#fff;cursor:pointer;font-size:calc(15px*var(--fz,1))}
+label.pledge input{margin:5px 0 0}
+tr.out td{background:var(--no2);color:var(--no);font-weight:700}
+@media print{#quiz{display:none!important}}
 </style>
 <style id="ipadCss">
 /* 아이패드 기준 화면(2026-11-09) — 폭 740px 이상(아이패드 세로·가로, 컴퓨터)에서 본문 폭을 넓히고 글자를 키운다. 휴대폰은 그대로. */
@@ -121,6 +139,12 @@ input[type=radio],input[type=checkbox]{width:19px;height:19px}
       <p class="muted" id="codeMsg" style="margin:8px 0 0"></p>
     </div>
     <div class="card">
+      <b>시험 중 지킬 것</b>
+      <p class="muted" id="pledgeText" style="margin:6px 0 10px"></p>
+      <label class="pledge"><input type="checkbox" id="pledge">
+        <span>확인했습니다. 시험이 끝날 때까지 이 화면을 벗어나지 않겠습니다.</span></label>
+    </div>
+    <div class="card">
       <div class="row" style="justify-content:space-between">
         <b>내 응시 기록</b>
         <span><!--T_START--><a class="link" id="toTeacher">교수님 화면</a><!--T_END--></span>
@@ -132,7 +156,7 @@ input[type=radio],input[type=checkbox]{width:19px;height:19px}
   <!-- ───────── 학생: 시험 ───────── -->
   <section id="quiz" class="hide">
     <div class="clockbar">
-      <div><b id="quizWho"></b><div class="muted" id="quizSub"></div></div>
+      <div><b id="quizWho"></b><div class="muted" id="quizSub"></div><div class="guardline" id="guardLine"></div></div>
       <div class="clock" id="clock">--:--</div>
     </div>
     <div id="qs"></div>
@@ -143,6 +167,7 @@ input[type=radio],input[type=checkbox]{width:19px;height:19px}
     <div class="card big"><div class="n" id="waitClock">--:--</div>
       <div class="m">제출되었습니다. <b>시험 종료 시각</b>이 되면 점수와 해설이 열립니다.<br>
         그때까지 이 화면을 그대로 두세요.</div></div>
+    <div class="card warn hide" id="waitNote"></div>
     <div class="card"><div class="muted" id="waitInfo"></div></div>
   </section>
 
@@ -199,6 +224,7 @@ input[type=radio],input[type=checkbox]{width:19px;height:19px}
           <select id="tMin" aria-label="제한시간"></select>
           <select id="tPass" aria-label="합격선"></select>
         </div>
+        <div class="row" style="margin-top:8px"><select id="tGuard" aria-label="이탈 자동 제출"></select></div>
         <div class="set"><b>단원별 문제 수</b> <span class="muted" id="tUSum"></span>
           <div class="chips" id="tUnits"></div></div>
         <div class="set"><b>난이도별 문제 수</b> <span class="muted" id="tLSum"></span>
@@ -221,6 +247,10 @@ input[type=radio],input[type=checkbox]{width:19px;height:19px}
           </div>
           <div class="row" style="margin-top:10px"><button id="tStart" style="flex:1">시작 — 지금부터 제한시간을 셉니다</button></div>
           <p class="muted" id="tMsg" style="margin:8px 0 0">칠판에 코드를 적거나 링크를 단톡방에 올리세요. 학생들이 이름과 코드를 넣고 대기 화면이 되면 「시작」을 누르세요. 그 순간부터 제한시간을 세고, 종료 시각에 전원이 자동 제출됩니다.</p>
+        </div>
+        <div class="card">
+          <div class="row" style="justify-content:space-between"><b>실시간 현황</b><span class="muted" id="liveStat"></span></div>
+          <div id="liveList" class="muted" style="margin-top:6px">학생이 시험 화면을 벗어나면 바로 여기에 이름이 뜹니다.</div>
         </div>
       </div>
     </div>
@@ -245,6 +275,8 @@ input[type=radio],input[type=checkbox]{width:19px;height:19px}
   <!--T_END-->
 </div>
 
+<div id="cover" class="hide"><div class="in"><span class="t" id="coverT"></span><p id="coverM"></p>
+  <button id="coverGo" class="hide"></button><button id="coverNo" class="ghost hide"></button></div></div>
 <div class="bar"><div class="wrap" id="barIn"></div></div>
 
 <script>
@@ -425,6 +457,12 @@ async function post(act, body) {
 
 /* ── 화면 전환 ──────────────────────────────────────────────────── */
 let view = 'home', cur = null, tick = null;
+/* 이탈 방지 기준: 이탈 GUARD회째(0 = 기록만)이거나 한 번에 AWAY_MAX 넘게 나가 있으면 자동 제출. 회차마다 교수님이 정하고(서버 cfg), 없으면 이 기본값 */
+const GUARD_DEF = D.guard === undefined ? 2 : +D.guard, AWAY_MAX = 10e3, BLIP = 2e3, BEAT_GAP = 5e3, IDLE_OFF = 15e3;
+const T0 = Date.now();                                  // 이 페이지가 뜬 시각 — 새로 고침으로 돌아왔을 때 「나간 시각 ~ 다시 뜬 시각」만 이탈로 센다
+let resumed = false;
+const guardOf = v => v === undefined || v === null ? GUARD_DEF : Math.max(0, Math.min(3, Math.floor(+v) || 0));
+const pledged = code => $('#pledge').checked || !!store.get('run:' + code, null);   // 이미 풀던 시험이면 다시 묻지 않는다
 function show(v) {
   view = v;
   ['home', 'quiz', 'waitEnd', 'result', 'teacher', 'gate'].forEach(x => { const e = $('#' + x); if (e) e.classList.toggle('hide', x !== v); });
@@ -436,14 +474,17 @@ function bar() {
     const c = unpackCode($('#code').value), opened = c && endTime(c.endMin), k = c && CFG[c.code];
     const done = c && store.get('done:' + c.code, null), pend = c && store.get('pend:' + c.code, null);
     const live_ = k && !k.err && k.end && Date.now() < k.end;                 // 교수님이 「시작」을 눌렀고 아직 종료 전
-    const go = el('button', '', done ? '내 결과 보기' : (k && !k.err && !k.end ? '교수님이 「시작」을 누르면 열립니다' : '시험 시작'));
-    go.disabled = !($('#name').value.trim() && c && opened && (done || pend || live_));
+    const needPledge = !!c && !done && !pend && !pledged(c.code);
+    const go = el('button', '', done ? '내 결과 보기' : (k && !k.err && !k.end ? '교수님이 「시작」을 누르면 열립니다'
+      : (needPledge && live_ ? '위 「시험 중 지킬 것」에 체크하세요' : '시험 시작')));
+    go.disabled = !($('#name').value.trim() && c && opened && (done || pend || live_)) || needPledge;
     go.onclick = start; b.append(go);
   } else if (view === 'quiz') {
     const n = cur.pick.filter(x => x !== null).length;
     const g = el('button', '', `제출하기 (${n}/${cur.n} 답함)`);
     g.disabled = n < cur.n;
-    g.onclick = () => { if (confirm('제출하면 고칠 수 없습니다. 제출할까요?')) submit('제출'); };
+    // 브라우저 confirm 창은 스크립트를 멈춰 그 사이의 이탈을 못 잡는다 → 페이지 안 확인 창을 쓴다(떠 있는 동안에도 이탈은 그대로 잡힌다)
+    g.onclick = () => cover('제출할까요?', '제출하면 고칠 수 없습니다.', '제출', () => { if (view === 'quiz') submit('제출'); }, '취소');
     b.append(g);
   } else if (view === 'waitEnd') {
     if (cur && store.get('pend:' + cur.code, null)) {
@@ -461,6 +502,7 @@ function bar() {
 
 /* ── 학생 ───────────────────────────────────────────────────────── */
 function home() {
+  $('#waitNote').classList.add('hide');
   const log = store.get('log', []);
   $('#myLog').innerHTML = log.length
     ? '<table><tr><th>단원</th><th>점수</th><th>결과</th><th>시각</th></tr>'
@@ -481,7 +523,9 @@ async function loadCfg(code) {
     const r = await post('cfg', { code: code });
     // end = 서버 시계로 정한 종료 시각(0 이면 교수님이 아직 「시작」 전) → 이 기기 시계로 옮겨 둔다
     const end = r.end ? r.end - ((r.now || Date.now()) - Date.now()) : 0;
-    CFG[code] = { cfg: r.cfg || null, n: r.n, pass: r.pass, mins: r.mins || 0, end: end };
+    // 이탈 기준: 새 서버는 guard 로, 옛 서버는 설정(cfg) 안의 g 로 온다(교수 앱이 두 곳에 다 싣는다). 둘 다 없으면 기본값
+    CFG[code] = { cfg: r.cfg || null, n: r.n, pass: r.pass, mins: r.mins || 0, end: end,
+                  guard: guardOf(r.guard !== undefined && r.guard !== null ? r.guard : (r.cfg ? r.cfg.g : undefined)) };
     if (end) store.set('cfg:' + code, CFG[code]);
   } catch (e) {
     // 옛 서버(cfg 요청이 없는 버전)면 학생이 알아들을 수 있는 말로 바꾼다
@@ -491,6 +535,7 @@ async function loadCfg(code) {
 }
 function codeCheck() {
   const raw = $('#code').value.trim(), m = $('#codeMsg');
+  pledgeDraw();
   if (!raw) { m.textContent = ''; return bar(); }
   const c = unpackCode(raw);
   if (!c) { m.innerHTML = '<span style="color:var(--no)">코드가 올바르지 않습니다. 다시 확인하세요.</span>'; return bar(); }
@@ -520,12 +565,13 @@ function codeCheck() {
     return bar();
   }
   if (!k.end) {                                        // 코드는 맞지만 교수님이 아직 「시작」 전 — 몇 초마다 다시 묻고, 시작되면 바로 연다
-    m.innerHTML = info + '<br><span style="color:var(--warn)">대기 중 — 교수님이 「시작」을 누르면 바로 시험이 열립니다. 이 화면을 그대로 두세요.</span>';
+    m.innerHTML = info + '<br><span style="color:var(--warn)">대기 중 — 교수님이 「시작」을 누르면 바로 시험이 열립니다. 이 화면을 그대로 두세요.</span>'
+      + (pledged(c.code) ? '' : '<br><b style="color:var(--no)">아래 「시험 중 지킬 것」에 체크해 두어야 자동으로 열립니다.</b>');
     clearTimeout(startPoll);
     startPoll = setTimeout(async () => {
       const cc = unpackCode($('#code').value); if (!cc || cc.code !== c.code || view !== 'home') return;
       delete CFG[c.code]; await loadCfg(c.code); codeCheck();
-      const k2 = CFG[c.code]; if (k2 && k2.end && Date.now() < k2.end && $('#name').value.trim()) start();   // 시작되면 자동으로 연다
+      const k2 = CFG[c.code]; if (k2 && k2.end && Date.now() < k2.end && $('#name').value.trim() && pledged(c.code)) start();   // 시작되면 자동으로 연다
     }, 3000);
     return bar();
   }
@@ -533,9 +579,9 @@ function codeCheck() {
 }
 let startPoll = null;
 function start() {
-  const name = $('#name').value.trim(), c = unpackCode($('#code').value);
+  const name = $('#name').value.replace(/^[=+@\s]+/, '').trim(), c = unpackCode($('#code').value);   // 시트에서 수식으로 읽힐 머리 기호는 뗀다(서버도 같은 식)
   if (!name || !c) return;
-  store.set('name', name);
+  store.set('name', name); store.set('last', $('#code').value);
   if (!endTime(c.endMin)) return codeCheck();
   const kk = CFG[c.code] || store.get('cfg:' + c.code, null);
   const end = new Date(kk && kk.end ? kk.end : 0);    // 서버가 정한 종료 시각(시작 전이면 0)
@@ -557,13 +603,23 @@ function start() {
   if (Date.now() >= end.getTime()) return codeCheck();
 
   const saved = store.get('run:' + c.code, null);
+  if (!saved && !$('#pledge').checked) return codeCheck();   // 「시험 중 지킬 것」에 체크해야 들어간다
   const qs = paperFor(examItems(c.unit, c.seed, k.cfg).items, name, c.code);
   cur = { ...c, name, cfg: k.cfg, n: qs.length, end: end.getTime(), qs: qs,
           pick: saved && saved.pick && saved.pick.length === qs.length ? saved.pick : Array(qs.length).fill(null),
-          leave: saved ? saved.leave : 0 };
-  paint(); show('quiz'); startTick();
+          leave: saved ? saved.leave || 0 : 0,
+          guard: guardOf(k.guard !== undefined && k.guard !== null ? k.guard : (k.cfg ? k.cfg.g : undefined)),
+          awayMs: saved ? saved.awayMs || 0 : 0, blip: saved ? saved.blip || 0 : 0, log: saved && saved.log ? saved.log : [],
+          soft: saved ? saved.soft || 0 : 0, awaySoft: !!(saved && saved.awaySoft),
+          awayAt: saved ? saved.awayAt || 0 : 0, sent: saved ? saved.sent || 0 : 0 };
+  // 새로 고침·다시 열기로 돌아왔다: 코드 입력·단추 누르는 시간은 빼고, 나간 시각부터 페이지가 다시 뜬 시각까지만 센다
+  if (cur.awayAt && !resumed && cur.awayAt < T0) cur.awayAt = Date.now() - (T0 - cur.awayAt);
+  resumed = true;
+  paint(); show('quiz'); startTick(); guardStart(!saved);
 }
-const saveRun = () => store.set('run:' + cur.code, { pick: cur.pick, leave: cur.leave });
+const saveRun = () => store.set('run:' + cur.code, { pick: cur.pick, leave: cur.leave, awayMs: cur.awayMs, blip: cur.blip,
+                                                     log: cur.log, awayAt: cur.awayAt, sent: cur.sent,
+                                                     soft: cur.soft, awaySoft: cur.awaySoft });
 
 function paint() {
   const u = D.units.find(x => x.n === cur.unit);
@@ -596,6 +652,11 @@ function startTick() {
     const left = cur.end - Date.now();
     if (view === 'quiz') {
       const c = $('#clock'); c.textContent = mmss(left); c.classList.toggle('hot', left < 60e3);
+      // 시계가 BEAT_GAP 넘게 멈췄다 돌아오면(화면 잠금·앱 전환을 브라우저가 알려 주지 않은 경우) 그 사이를 이탈로 센다
+      const now = Date.now();
+      if (cur.beat && now - cur.beat > BEAT_GAP && !cur.awayAt && !document.hidden) { cur.awayAt = cur.beat; comeBack(); }
+      if (!cur || view !== 'quiz') return;             // 이탈로 자동 제출됐다
+      cur.beat = now;
       if (left <= 0) submit('시간 종료');
     } else if (view === 'waitEnd') {
       $('#waitClock').textContent = mmss(left);
@@ -606,8 +667,11 @@ function startTick() {
 }
 async function submit(how) {
   clearInterval(tick);
+  if (cur.awayAt) awayTally(Date.now() - cur.awayAt);   // 화면 밖에 있는 채로 제출됐다(시간 종료) — 그 이탈도 센다
+  uncover(); sleepOk();
   const answers = cur.qs.map((q, i) => ({ id: q.id, pick: cur.pick[i] === null || cur.pick[i] === undefined ? '' : q.opts[cur.pick[i]] }));
   store.set('pend:' + cur.code, { name: cur.name, pick: cur.pick, answers: answers, leave: cur.leave, how: how,
+                                  leaveSec: Math.round((cur.awayMs || 0) / 1000), leaveLog: (cur.log || []).join(', '),
                                   unit: cur.unit, seed: cur.seed, endMin: cur.endMin, pass: cur.pass, endAt: cur.end,
                                   n: cur.n, cfg: cur.cfg || null });
   show('waitEnd'); $('#waitInfo').textContent = '채점 서버로 보내는 중…';
@@ -619,6 +683,7 @@ async function sendPending() {
   if (!p) return afterSubmit({ ok: true, held: true });
   try {
     const res = await post('submit', { code: cur.code, name: p.name, answers: p.answers, leave: p.leave,
+                                       leaveSec: p.leaveSec || 0, leaveLog: p.leaveLog || '',
                                        how: p.how, endAt: p.endAt, pass: p.pass });
     store.del('pend:' + cur.code);
     store.set('done:' + cur.code, { code: cur.code, name: p.name, unit: p.unit, seed: p.seed,
@@ -680,10 +745,145 @@ function showResult(res) {
   });
   show('result');
 }
-/* 시험 중 다른 앱·탭으로 나간 횟수를 센다 (결과에 함께 보고된다) */
+/* ── 이탈 방지 (2026-11-11) ─────────────────────────────────────────
+   웹 앱은 다른 앱으로 나가는 것 자체를 막지 못한다. 그래서 ① 나간 순간 문제를 가리고 ② 돌아오면 경고를 띄우고
+   ③ 횟수·시간을 교수님 화면에 바로 보내고 ④ 기준을 넘으면 그 순간의 답안으로 자동 제출한다.
+   감지: 화면이 가려짐(visibilitychange) · 초점을 잃음(blur — 분할 화면·다른 창) · 시계가 멈춤(startTick 의 BEAT_GAP).
+   BLIP(2초)보다 짧은 이탈은 알림 창·전화일 수 있어 횟수에 넣지 않되, 세 번 쌓이면 1회로 친다. 시간은 전부 더한다. */
+const guardOn = () => view === 'quiz' && !!cur;
+const hms = t => { const d = new Date(t); return hhmm(d) + ':' + String(d.getSeconds()).padStart(2, '0'); };
+let coverYes = null;
+/** 화면 전체를 덮는 창. btn = 큰 단추 글자(없으면 단추 없음), onYes = 그 단추를 누르면 할 일, noText = 작은 「취소」 단추 글자 */
+function cover(title, html, btn, onYes, noText) {
+  $('#coverT').textContent = title; $('#coverM').innerHTML = html;
+  const go = $('#coverGo'), no = $('#coverNo');
+  go.textContent = btn || ''; go.classList.toggle('hide', !btn);
+  no.textContent = noText || ''; no.classList.toggle('hide', !noText);
+  coverYes = onYes || null; $('#cover').classList.remove('hide');
+}
+function uncover() { coverYes = null; $('#cover').classList.add('hide'); document.body.classList.remove('away'); }
+/* 화면 꺼짐 방지(wakeLock): 화면이 저절로 꺼지면 그것도 「가려짐」이라 이탈로 잡힌다 → 시험 중에는 켜 둔다.
+   못 얻는 브라우저(카카오톡 인앱 등)가 있다 → 그런 기기에서 IDLE_OFF 넘게 손을 안 대다가 가려진 것은 「화면 꺼짐 추정」:
+   기록·교수 화면 표시는 그대로 하되 자동 제출 판정에서는 뺀다(억울한 제출이 가장 큰 사고다). */
+let wake = null, wakeOk = false, wakeTried = false, wakeLost = 0, lastInput = Date.now();
+async function stayAwake() {
+  if (document.hidden || (wake && !wake.released)) return;
+  try {
+    if (navigator.wakeLock) {
+      const w = await navigator.wakeLock.request('screen'); wake = w; wakeOk = true;
+      w.addEventListener('release', () => { if (wake === w) { wake = null; wakeOk = false; wakeLost = Date.now(); if (guardOn() && !document.hidden) stayAwake(); } });
+    }
+  } catch (e) { wakeOk = false; }
+  wakeTried = true; if (guardOn()) guardLine();
+}
+function sleepOk() { const w = wake; wake = null; wakeOk = false; try { if (w) w.release(); } catch (e) {} }
+['pointerdown', 'touchstart', 'keydown', 'scroll', 'change'].forEach(t =>
+  window.addEventListener(t, () => { lastInput = Date.now(); }, { capture: true, passive: true }));
+/** 교수님 화면(실시간 현황)으로 보내는 신호 — 화면이 가려지는 순간에도 나가도록 sendBeacon 을 쓴다. 실패해도 시험에는 영향이 없다. */
+function beacon(st) {
+  if (!SRV || !cur) return;
+  cur.sent = (cur.sent || 0) + 1; if (cur.sent > 80) return;
+  const body = JSON.stringify({ act: 'leave', code: cur.code, name: cur.name, st: st, n: cur.leave,
+                                sec: Math.round((cur.awayMs || 0) / 1000), seq: cur.sent });
+  // keepalive fetch 가 먼저다 — sendBeacon 은 구글 로그인 쿠키를 실어 보내서, 구글 계정을 여러 개 쓰는 폰에서 Apps Script 가 엉뚱한 주소로 돌려보낼 수 있다
+  try { fetch(SRV, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: body, keepalive: true }).catch(() => {}); return; } catch (e) {}
+  try { if (navigator.sendBeacon) navigator.sendBeacon(SRV, new Blob([body], { type: 'text/plain;charset=utf-8' })); } catch (e) {}
+}
+function guardLine(flash) {
+  const g = cur.guard, s = Math.round((cur.awayMs || 0) / 1000), e = $('#guardLine');
+  const rule = g > 0 ? `이탈 ${g}회째 또는 한 번에 10초 초과 시 자동 제출` : '이탈은 교수님 화면에 표시됩니다';
+  const noLock = wakeTried && !wakeOk && !document.hidden;
+  e.textContent = flash || ((cur.leave || s ? `이탈 ${cur.leave}회 · ${s}초 기록됨 · ${rule}` : `화면을 벗어나지 마세요 · ${rule}`)
+    + (noLock ? ' · ⚠ 이 브라우저는 화면 꺼짐을 막지 못합니다 — 화면을 자주 만지세요' : ''));
+  e.classList.toggle('hot', !!(flash || cur.leave || s || noLock));
+}
+function guardStart(fresh) {
+  stayAwake(); cur.beat = Date.now(); lastInput = Date.now(); guardLine();
+  if (fresh) {                                          // 입장 신호는 0~8초 사이에 흩어 보낸다(전원이 같은 순간에 시작하므로 서버가 몰리지 않게)
+    saveRun(); const code = cur.code;
+    setTimeout(() => {
+      if (!guardOn() || cur.code !== code || !SRV) return;
+      cur.sent = (cur.sent || 0) + 1;
+      // 서버가 이 이름의 지난 이탈(다른 창·시크릿 창·다른 기기에서 쌓은 것)을 돌려주면 이어받는다 — 새 창으로 들어와 횟수를 되돌리지 못하게
+      post('leave', { code: code, name: cur.name, st: 'join', n: cur.leave, sec: Math.round((cur.awayMs || 0) / 1000), seq: cur.sent }).then(r => {
+        if (!guardOn() || cur.code !== code || !r) return;
+        const n = +r.n || 0, ms = (+r.sec || 0) * 1000;
+        if (n > cur.leave || ms > cur.awayMs) { cur.leave = Math.max(cur.leave, n); cur.awayMs = Math.max(cur.awayMs || 0, ms); saveRun(); guardLine(); }
+      }).catch(() => {});
+    }, Math.floor(Math.random() * 8000));
+    // 화면이 가려졌거나 다른 창에 초점이 있는 채로 시험이 열렸다 — 세지는 않고 문제만 가려 둔다(단추를 누르면 이 창에 초점이 온다)
+    if (document.hidden || !document.hasFocus()) {
+      document.body.classList.add('away');
+      cover('시험이 시작되었습니다', '아래 단추를 눌러 문제를 여세요. 시간은 이미 흐르고 있습니다.', '문제 열기');
+    }
+  }
+  else if (cur.awayAt) comeBack();                      // 화면 밖에 있다가 새로 고침·다시 열기로 돌아왔다
+}
+function goAway() {
+  if (!guardOn() || cur.awayAt) return;
+  const now = Date.now();
+  cur.awayAt = now; cur.awaySoft = !wakeOk && now - wakeLost > 1500 && now - lastInput >= IDLE_OFF; saveRun();
+  document.body.classList.add('away');
+  cover('시험 화면을 벗어났습니다', '지금 바로 돌아오세요. 벗어나 있는 시간이 기록되고 있습니다.', false);
+  beacon('out');
+}
+/** 이탈 한 번을 장부에 올린다. 돌려주는 값 = 횟수에 들어갔는가 (cur.lastSoft = 화면 꺼짐 추정이었는가) */
+function awayTally(d) {
+  d = Math.max(0, d);
+  const at = cur.awayAt || Date.now() - d;
+  cur.awayAt = 0; cur.awayMs = (cur.awayMs || 0) + d;
+  let counted = d >= BLIP;
+  if (!counted) { cur.blip = (cur.blip || 0) + 1; counted = cur.blip % 3 === 0; }
+  const soft = !!cur.awaySoft; cur.awaySoft = false; cur.lastSoft = soft && counted;
+  if (counted) { cur.leave++; if (soft) cur.soft = (cur.soft || 0) + 1; }
+  cur.log = (cur.log || []).concat(hms(at) + ' ' + Math.round(d / 1000) + '초' + (counted ? (soft ? '(화면 꺼짐 추정)' : '') : '(짧음)')).slice(-30);
+  saveRun();
+  return counted;
+}
+function comeBack() {
+  if (!guardOn() || !cur.awayAt) return;
+  const d = Math.max(0, Date.now() - cur.awayAt), s = Math.round(d / 1000);
+  const counted = awayTally(d), g = cur.guard, soft = cur.lastSoft, strikes = cur.leave - (cur.soft || 0);
+  cur.beat = Date.now(); lastInput = Date.now(); stayAwake();
+  if (Date.now() >= cur.end) { uncover(); return; }     // 벗어나 있는 사이 시험이 끝났다 — 시계가 「시간 종료」로 제출한다
+  if (g > 0 && counted && !soft && (strikes >= g || d >= AWAY_MAX)) {
+    const why = d >= AWAY_MAX ? `한 번에 ${s}초 동안 시험 화면을 벗어나` : `시험 화면을 ${cur.leave}회 벗어나`;
+    const note = $('#waitNote');
+    note.innerHTML = `<b style="color:var(--no)">화면 이탈로 자동 제출되었습니다.</b><br><span class="muted">${why} 그 순간의 답안이 제출되었습니다`
+      + ` (이탈 ${cur.leave}회 · 총 ${Math.round(cur.awayMs / 1000)}초). 교수님 화면에 기록되었습니다.</span>`;
+    note.classList.remove('hide');
+    beacon('kick');
+    return submit('이탈 제출');
+  }
+  beacon('back');
+  if (!counted) { uncover(); guardLine('짧은 이탈이 기록되었습니다 — 화면을 벗어나지 마세요'); setTimeout(() => { if (guardOn()) guardLine(); }, 4000); return; }
+  guardLine();
+  const left = g - strikes;
+  cover(`화면 이탈 ${cur.leave}회 기록`, (soft
+      ? `방금 <b>${s}초</b> 동안 화면이 꺼져 있던 것으로 보입니다. 기록되어 교수님 화면에 표시되었습니다.<br><b>이 브라우저는 화면 꺼짐을 막지 못합니다 — 화면을 자주 만지세요.</b>`
+      : `방금 <b>${s}초</b> 동안 시험 화면을 벗어났습니다. 교수님 화면에 표시되었습니다.`)
+    + (g > 0 ? `<br>${left <= 1 ? '<b>한 번만 더 벗어나면 자동 제출됩니다.</b>' : `이탈 <b>${g}회째</b>에 자동 제출됩니다.`} 한 번에 10초 넘게 벗어나도 자동 제출됩니다.` : '')
+    + '<br>시간은 계속 흐르고 있습니다.', '확인하고 계속 풀기');
+}
+function pledgeDraw() {
+  const c = unpackCode($('#code').value), k = c && CFG[c.code];
+  const g = k && !k.err ? guardOf(k.guard) : GUARD_DEF;
+  $('#pledgeText').innerHTML = '시험 중에 <b>다른 앱·탭·창으로 나가면</b> 횟수와 시간이 기록되어 <b>교수님 화면에 바로 표시</b>됩니다.'
+    + (g > 0 ? ` <b style="color:var(--no)">${g === 1 ? '한 번이라도 나가거나' : `${g}번째로 나가거나`} 한 번에 10초 넘게 나가 있으면 그 순간의 답안으로 자동 제출</b>됩니다.` : '')
+    + ' 시작 전에 <b>방해금지 모드</b>를 켜서 전화·알림이 오지 않게 하세요. 문제는 복사할 수 없습니다.';
+}
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden && view === 'quiz' && cur) { cur.leave++; saveRun(); }
+  if (document.hidden) return goAway();
+  if (guardOn() && !cur.awayAt) cur.beat = Date.now();  // 가려진 구간은 goAway 가 직접 잰다 — 시계 멈춤 검사는 화면이 보이는 동안의 멈춤만 본다
+  comeBack(); if (guardOn()) stayAwake();
 });
+window.addEventListener('pagehide', goAway);
+window.addEventListener('pageshow', () => { if (!document.hidden) comeBack(); });
+window.addEventListener('blur', () => setTimeout(() => { if (!document.hasFocus()) goAway(); }, 0));
+window.addEventListener('focus', comeBack);
+/* 문제를 복사해 번역기·AI 에 붙여넣지 못하게 한다(시험 화면에서만) */
+['copy', 'cut', 'contextmenu', 'selectstart', 'dragstart'].forEach(t =>
+  document.addEventListener(t, e => { if (view === 'quiz') e.preventDefault(); }));
 
 /*T_JS_START*/
 /* ── 교수님 화면 (교수용 빌드에만 들어간다) ───────────────────────── */
@@ -694,6 +894,7 @@ function teacher() {
   $('#tUnit').innerHTML = D.units.map(u => opt(u.n, `Unit ${u.n} ${esc(u.title)}`)).join('');
   $('#tN').innerHTML = Array.from({ length: 16 }, (_, i) => opt(i + 5, `${i + 5}문제`, i + 5 === N_DEF)).join('');
   $('#tMin').innerHTML = Array.from({ length: 20 }, (_, i) => opt(i + 1, `${i + 1}분`, i + 1 === (D.minDefault || 10))).join('');
+  $('#tGuard').innerHTML = [0, 1, 2, 3].map(g => opt(g, g ? `화면 이탈 ${g}회째 자동 제출${g === 2 ? ' (권장)' : ''}` : '화면 이탈 — 자동 제출 끔(기록·경고만)', g === GUARD_DEF)).join('');
   $('#tUnit').onchange = tDefaults; $('#tN').onchange = tDefaults; $('#tReset').onclick = tDefaults;
   tDefaults();
   show('teacher'); collect();
@@ -745,29 +946,40 @@ async function openExam() {
   // 2026-09-30: 코드의 시각 칸은 이제 '연 시각'(12시간 지나면 지난 코드). 종료 시각은 「시작」을 누를 때 서버가 정한다.
   const now = new Date(), endMin = now.getHours() * 60 + now.getMinutes();
   const code = packCode(unit, endMin, Math.floor(Math.random() * SEED_N), n, pass);
-  const cfg = { u: Object.assign({}, tCfg.u), l: tCfg.l.slice() };
+  const guard = +$('#tGuard').value;                   // 이탈 N회째 자동 제출(0 = 끔)
+  const cfg = { u: Object.assign({}, tCfg.u), l: tCfg.l.slice(), g: guard };   // g: 옛 서버도 「설정」 열에 그대로 두었다가 학생 앱에 돌려준다
   $('#tOpen').disabled = true; $('#tOpenMsg').textContent = '채점 서버에 등록하는 중…';
   // 채점 스크립트가 아직 옛 버전(「시작」 요청이 없음)이면 예전처럼 열 때부터 시간을 센다 — 대신 초 단위까지 정확히
   let legacy = false;                                  // ping 의 v 가 2 이상이면 새 서버(비밀번호 틀린 요청으로 떠보면 저장된 비밀번호가 지워진다 — 쓰지 않는다)
-  try { const pg = await post('ping', {}); legacy = !(pg && pg.v >= 2); } catch (e) { legacy = false; }
+  let v3 = false;                                      // v 3 이상 = 실시간 현황(live)·이탈 기준(guard) 지원(2026-11-11)
+  let pg = null;
+  for (let i = 0; i < 2 && !pg; i++) { try { pg = await post('ping', {}); } catch (e) {} }
+  if (!pg) {                                           // 서버 버전을 모르는 채로 열지 않는다(추정으로 열면 시작 방식·현황이 어긋난다)
+    $('#tOpenMsg').innerHTML = '<span style="color:var(--no)">채점 서버 확인 실패 — 인터넷을 확인하고 다시 누르세요.</span>';
+    $('#tOpen').disabled = false; return;
+  }
+  legacy = !(pg.v >= 2); v3 = pg.v >= 3;
   try {                                                // 배분은 서버에만 있으므로 등록이 안 되면 코드를 내지 않는다
-    await post('open', { pin: store.get('pinText', ''), code: code, unit: unit, endAt: legacy ? Date.now() + mins * 60e3 : 0, mins: mins, pass: pass, n: n, cfg: cfg });
+    await post('open', { pin: store.get('pinText', ''), code: code, unit: unit, endAt: legacy ? Date.now() + mins * 60e3 : 0, mins: mins, pass: pass, n: n, cfg: cfg, guard: guard });
   } catch (e) {
     $('#tOpenMsg').innerHTML = `<span style="color:var(--no)">서버 등록 실패 — ${esc(e.message)}</span><br>`
       + '등록이 안 되면 학생 앱이 배분을 받지 못해 시험을 시작할 수 없습니다. 인터넷을 확인하고 다시 누르세요.';
     $('#tOpen').disabled = false; return;
   }
   $('#tOpen').disabled = false; $('#tOpenMsg').textContent = '';
-  live = { unit, code, end: 0, mins, pass, n, cfg };
-  CFG[code] = { cfg: cfg, n: n, pass: pass }; store.set('cfg:' + code, CFG[code]);
+  live = { unit, code, end: 0, mins, pass, n, cfg, guard };
+  CFG[code] = { cfg: cfg, n: n, pass: pass, guard: guard }; store.set('cfg:' + code, CFG[code]);
   const mine = store.get('myCodes', []); mine.push(code); store.set('myCodes', mine.slice(-20));
   $('#liveCode').textContent = code;
-  $('#liveInfo').textContent = `Unit ${unit} · ${cfgLabel(cfg)} · ${n}문제 · ${pass}문제 이상 합격 · 제한 ${mins}분 · 「시작」 전`;
+  $('#liveInfo').textContent = `Unit ${unit} · ${cfgLabel(cfg)} · ${n}문제 · ${pass}문제 이상 합격 · 제한 ${mins}분 · ${guard ? `이탈 ${guard}회째 자동 제출` : '이탈 기록만'} · 「시작」 전`;
   $('#liveBox').classList.remove('hide');
   $('#sheetCode').value = code; $('#repCode').value = code;   // 「문제지」·「결과」 탭에서 바로 쓰게
   $('#tMsg').textContent = '채점 서버에 등록했습니다. 칠판에 코드를 적거나 링크를 단톡방에 올리세요. 학생들이 코드를 넣고 대기 화면이 되면 「시작」을 누르세요 — 그 순간부터 ' + mins + '분을 셉니다.';
   clearInterval(ttick); $('#tClock').textContent = mmss(mins * 60e3); $('#tClock').classList.remove('hot');
   $('#tStart').classList.remove('hide'); $('#tStart').disabled = false; $('#tStart').textContent = `시작 — 지금부터 ${mins}분을 셉니다`;
+  clearInterval(livePoll); $('#liveStat').textContent = '';
+  if (v3) { $('#liveList').textContent = '학생이 시험 화면을 벗어나면 바로 여기에 이름이 뜹니다.'; liveStart(); }
+  else $('#liveList').innerHTML = `<span style="color:var(--warn)">채점 스크립트가 옛 버전이라 실시간 현황이 나오지 않습니다(이탈 기준과 경고·자동 제출은 그대로 동작하고, 횟수는 「결과 모으기」에 나옵니다). 「배포 관리 → 새 버전」을 하면 여기에 현황이 뜹니다.</span>`;
   if (legacy) {                                        // 옛 서버: 시작 단추 없이 바로 시계를 돌린다
     $('#tStart').classList.add('hide');
     $('#tMsg').innerHTML = '<span style="color:var(--warn)">채점 스크립트가 옛 버전이라 지금부터 시간이 흐릅니다. 「배포 관리 → 새 버전」을 하면 「시작」 단추가 생깁니다.</span>';
@@ -782,6 +994,34 @@ function startClock() {
     if (left <= 0) { clearInterval(ttick); $('#tMsg').innerHTML = '<b style="color:var(--no)">시험이 종료되었습니다.</b> 「결과 모으기」에서 불러오세요.'; }
   };
   upd(); ttick = setInterval(upd, 500);
+}
+/* 실시간 현황: 4초마다 서버에 묻는다. 지금 화면 밖에 있는 학생이 맨 위, 빨간 줄. 종료 30초 뒤에 멈춘다. */
+let livePoll = null, liveBusy = false;
+function liveStart() {
+  clearInterval(livePoll);
+  const one = async () => {
+    if (!live || liveBusy) return;
+    const code = live.code;
+    if (live.end && Date.now() > live.end + 30e3) clearInterval(livePoll);
+    liveBusy = true;
+    try { const res = await post('live', { pin: store.get('pinText', ''), code: code }); if (live && live.code === code) liveDraw(res); }
+    catch (e) { $('#liveStat').textContent = '현황을 받지 못했습니다 — ' + e.message; }
+    liveBusy = false;
+  };
+  one(); livePoll = setInterval(one, 4000);
+}
+function liveDraw(res) {
+  const done = new Set(res.done || []), list = res.list || [];
+  const outNow = x => x.st === 'out' && !done.has(x.name) ? 1 : 0;
+  const lv = list.filter(x => x.n > 0 || x.sec > 0 || x.st === 'out' || x.st === 'kick')
+    .sort((a, b) => (outNow(b) - outNow(a)) || (b.n - a.n) || (b.sec - a.sec));
+  $('#liveStat').textContent = `응시 중 ${list.filter(x => !done.has(x.name)).length}명 · 제출 ${done.size}명 · 이탈 ${lv.length}명`;
+  const state = x => outNow(x) ? `지금 화면 밖 (${Math.max(0, Math.round((res.now - x.at) / 1000))}초째)`
+    : x.st === 'kick' ? '이탈로 자동 제출' : done.has(x.name) ? '제출함' : '돌아옴';
+  $('#liveList').innerHTML = lv.length
+    ? '<table><tr><th>이름</th><th>이탈</th><th>시간</th><th>상태</th></tr>'
+      + lv.map(x => `<tr class="${outNow(x) ? 'out' : ''}"><td>${esc(x.name)}</td><td>${x.n}회</td><td>${x.sec}초</td><td>${state(x)}</td></tr>`).join('') + '</table>'
+    : '아직 화면을 벗어난 학생이 없습니다.';
 }
 async function startExam() {
   if (!live || live.end) return;
@@ -842,10 +1082,10 @@ function drawResults() {
     + `<div><b style="color:var(--no)">${rows.length - pass}</b>불합격</div><div><b>${absent.length}</b>미응시</div>`;
   const body = rows.map(r => `<tr class="${r.pass ? '' : 'bad'}"><td>${esc(r.name)}</td><td>${esc(r.at)}</td>`
       + `<td>${r.score}/${r.n}</td><td style="color:${r.pass ? 'var(--ok)' : 'var(--no)'}">${r.pass ? '합격' : '불합격'}</td>`
-      + `<td>${r.leave}</td></tr>`).join('')
-    + absent.map(n => `<tr class="absent"><td>${esc(n)}</td><td colspan="4">미응시</td></tr>`).join('');
+      + `<td>${r.leave}${r.leaveSec ? ' · ' + r.leaveSec + '초' : ''}</td><td>${esc(r.how || '')}</td></tr>`).join('')
+    + absent.map(n => `<tr class="absent"><td>${esc(n)}</td><td colspan="5">미응시</td></tr>`).join('');
   $('#resultBox').innerHTML = body
-    ? '<table><tr><th>이름</th><th>제출</th><th>점수</th><th>결과</th><th>이탈</th></tr>' + body + '</table>'
+    ? '<table><tr><th>이름</th><th>제출</th><th>점수</th><th>결과</th><th>이탈</th><th>방식</th></tr>' + body + '</table>'
     : '<p class="muted" style="margin:10px 0 0">아직 불러온 결과가 없습니다.</p>';
 }
 /*T_JS_END*/
@@ -859,6 +1099,15 @@ $('#appBy').innerHTML = [D.school ? esc(D.school) : '', D.teacher ? '교수 <b>'
 document.title = D.title;
 $('#name').value = store.get('name', '');
 $('#name').oninput = bar;
+$('#coverGo').onclick = () => { const f = coverYes; uncover(); if (f) f(); };
+$('#coverNo').onclick = uncover;
+$('#pledge').onchange = () => {                         // 체크하는 순간 이미 시작된 시험이면 바로 연다
+  codeCheck();
+  const c = unpackCode($('#code').value), k = c && CFG[c.code];
+  if ($('#pledge').checked && view === 'home' && k && !k.err && k.end && Date.now() < k.end && $('#name').value.trim()
+      && !store.get('done:' + c.code, null) && !store.get('pend:' + c.code, null)) start();
+};
+pledgeDraw();
 $('#code').oninput = () => {
   const v = $('#code').value.toUpperCase().replace(/[^A-Z2-9]/g, '').slice(0, 8);
   $('#code').value = v.length > 4 ? v.slice(0, 4) + '-' + v.slice(4) : v;
@@ -896,9 +1145,9 @@ $('#repCode').oninput = () => {
   $('#repCode').value = v.length > 4 ? v.slice(0, 4) + '-' + v.slice(4) : v;
 };
 $('#copyResult').onclick = async () => {
-  const t = [['이름', '제출', '점수', '결과', '이탈'].join('\t'),
-    ...REP.list.map(r => [r.name, r.at, r.score + '/' + r.n, r.pass ? '합격' : '불합격', r.leave].join('\t')),
-    ...REP.absent.map(n => [n, '', '', '미응시', ''].join('\t'))].join('\n');
+  const t = [['이름', '제출', '점수', '결과', '이탈', '이탈 초', '방식'].join('\t'),
+    ...REP.list.map(r => [r.name, r.at, r.score + '/' + r.n, r.pass ? '합격' : '불합격', r.leave, r.leaveSec || 0, r.how || ''].join('\t')),
+    ...REP.absent.map(n => [n, '', '', '미응시', '', '', ''].join('\t'))].join('\n');
   try { await navigator.clipboard.writeText(t); $('#pasteMsg').textContent = '엑셀용으로 복사했습니다.'; }
   catch (e) { $('#pasteMsg').textContent = '복사가 막혀 있습니다. 표를 직접 선택해 복사하세요.'; }
 };
@@ -920,6 +1169,16 @@ if (D.role === 'teacher') {
   } else gateOpen();
 }
 else show('home');
+/* 시험 중에 새로 고침·탭 다시 열기로 돌아왔으면 코드를 다시 치지 않아도 곧바로 시험 화면으로 되돌린다(서버 왕복 없음) */
+(function resume() {
+  if (D.role === 'teacher') return;
+  const raw = qp.get('c') ? $('#code').value : store.get('last', ''), c = raw && unpackCode(raw);
+  if (!c || !endTime(c.endMin)) return;
+  const k = store.get('cfg:' + c.code, null), nm = store.get('name', '');
+  if (!nm || !k || !k.end || Date.now() >= k.end || !store.get('run:' + c.code, null)
+      || store.get('done:' + c.code, null) || store.get('pend:' + c.code, null)) return;
+  $('#code').value = raw; $('#name').value = nm; CFG[c.code] = k; start();
+})();
 </script>
 <!--hubback-->
 <script>/* 통합앱에서 열었을 때만 맨 위에 「‹ 전체 앱」(hubback.py) */
