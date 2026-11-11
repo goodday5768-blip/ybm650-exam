@@ -225,6 +225,9 @@ input[type=radio],input[type=checkbox]{width:19px;height:19px}
           <select id="tPass" aria-label="합격선"></select>
         </div>
         <div class="row" style="margin-top:8px"><select id="tGuard" aria-label="이탈 자동 제출"></select></div>
+        <div class="row" style="margin-top:8px"><input type="text" id="tClass" placeholder="반 이름 (예: A반) — 한 반이면 비워 두세요" maxlength="12" autocomplete="off" aria-label="반 이름"></div>
+        <label class="pledge" style="margin-top:8px"><input type="checkbox" id="tSkip" checked>
+          <span>전에 낸 문제는 빼고 출제 <span class="muted" id="tSkipNote"></span></span></label>
         <div class="set"><b>단원별 문제 수</b> <span class="muted" id="tUSum"></span>
           <div class="chips" id="tUnits"></div></div>
         <div class="set"><b>난이도별 문제 수</b> <span class="muted" id="tLSum"></span>
@@ -292,12 +295,14 @@ const LV = ['하', '중', '상'];                          // 난이도 (은행�
 Object.entries(D.items).forEach(([n, arr]) => arr.forEach(it => { it.u = +n; if (it.lv === undefined) it.lv = 1; }));
 const rangeOf = u => D.units.filter(x => x.n <= u).map(x => x.n);
 const rangeLabel = u => u === 1 ? 'Unit 1' : `Unit 1~${u}`;
+const FUNIT = {};                                       // 문장 틀 → 단원 (전에 낸 문제 빼기)
 const frameOf = id => id.replace(/[a-z]$/, '');        // U7A-06c → U7A-06 (같은 틀의 변형)
 /* 단원마다 문장 틀 수(한 회에 같은 틀은 한 번만 나오므로 그 단원에서 낼 수 있는 최대)와 난이도별 틀 수 */
 const FRAMES = {}, LVCAP = {};
 D.units.forEach(u => {
   const seen = new Map();
   D.items[u.n].forEach(it => { if (!seen.has(frameOf(it.id))) seen.set(frameOf(it.id), it.lv); });
+  seen.forEach((lv, f) => { FUNIT[f] = u.n; });
   FRAMES[u.n] = seen.size; LVCAP[u.n] = [0, 0, 0]; seen.forEach(lv => LVCAP[u.n][lv]++);
 });
 
@@ -391,7 +396,8 @@ function examItems(unit, seed, cfg) {
   const left = [0, 1, 2].map(i => Math.max(0, +(cfg.l || [])[i] || 0));
   const units = Object.keys(cfg.u).map(Number).filter(k => D.items[k]).sort((a, b) => b - a);
   const N = Math.min(20, Math.max(1, cfgSum(units.map(k => cfg.u[k]))));
-  const free = it => !usedFrame.has(frameOf(it.id)) && !picked.includes(it);
+  const X = new Set(cfg.x || []);                      // 앞 회차에 이미 낸 문장 틀(2026-11-11) — 교수 화면이 시험을 열 때 정해 넣는다
+  const free = it => !usedFrame.has(frameOf(it.id)) && !X.has(frameOf(it.id)) && !picked.includes(it);
   const take = it => { picked.push(it); usedFrame.add(frameOf(it.id)); };
   units.forEach(k => {
     const want = Math.max(0, Math.min(FRAMES[k], +cfg.u[k] || 0));
@@ -415,6 +421,12 @@ function examItems(unit, seed, cfg) {
     for (const it of shuf(rangeOf(unit).flatMap(k => D.items[k]), rnd)) {
       if (picked.length >= N) break;
       if (free(it)) take(it);
+    }
+  }
+  if (picked.length < N && X.size) {                   // 그래도 모자라면 이미 낸 틀에서라도 채운다(문제 수는 지킨다)
+    for (const it of shuf(rangeOf(unit).flatMap(k => D.items[k]), rnd)) {
+      if (picked.length >= N) break;
+      if (!usedFrame.has(frameOf(it.id)) && !picked.includes(it)) take(it);
     }
   }
   short.l = left;                                      // 끝까지 못 채운 난이도 몫
@@ -896,8 +908,9 @@ function teacher() {
   $('#tMin').innerHTML = Array.from({ length: 20 }, (_, i) => opt(i + 1, `${i + 1}분`, i + 1 === (D.minDefault || 10))).join('');
   $('#tGuard').innerHTML = [0, 1, 2, 3].map(g => opt(g, g ? `화면 이탈 ${g}회째 자동 제출${g === 2 ? ' (권장)' : ''}` : '화면 이탈 — 자동 제출 끔(기록·경고만)', g === GUARD_DEF)).join('');
   $('#tUnit').onchange = tDefaults; $('#tN').onchange = tDefaults; $('#tReset').onclick = tDefaults;
+  $('#tClass').value = store.get('cls', ''); $('#tClass').oninput = () => tStatus(); $('#tSkip').onchange = () => tStatus();
   tDefaults();
-  show('teacher'); collect();
+  show('teacher'); collect(); histLoad();
 }
 /* 단원·문제 수를 바꾸면 배분을 기본값(오늘 단원 몫 + 앞 단원 복습, 난이도 3:4:3)으로 다시 놓는다 */
 function tDefaults() {
@@ -919,8 +932,43 @@ function tDraw() {
   $$('#tLevels input').forEach(x => x.oninput = () => { tCfg.l[+x.dataset.l] = clamp(x.value, 20); tStatus(); });
   tStatus();
 }
+/* ── 전에 낸 문제 빼기 (2026-11-11) ─────────────────────────────────
+   회차마다 실제로 낸 문장 틀(cfg.f)과 반 이름(cfg.c)을 서버 「설정」 열에 남긴다. 새 시험을 열 때 같은 반이 이미 본 틀을
+   cfg.x 에 실어 보내면 학생 앱이 그 틀을 빼고 뽑는다. 단원에 새 틀이 모자라면 가장 오래전에 낸 것부터 다시 낸다.
+   기록은 서버(act=rounds)에서 받고, 옛 서버면 이 기기에 쌓인 것만 쓴다. */
+let HIST = store.get('hist', []);                       // [{at, code, c, f:[틀…]}] 오래된 것부터
+function histMerge(list) {
+  const m = new Map(HIST.map(h => [h.code, h]));
+  list.forEach(h => { if (h && h.code && Array.isArray(h.f)) m.set(h.code, h); });
+  HIST = [...m.values()].sort((a, b) => a.at - b.at).slice(-200); store.set('hist', HIST);
+}
+async function histLoad() {
+  try {
+    const r = await post('rounds', { pin: store.get('pinText', '') });
+    histMerge((r.list || []).map(x => ({ at: x.at, code: x.code, c: (x.cfg && x.cfg.c) || '', f: x.cfg && x.cfg.f })));
+  } catch (e) {}
+  if ($('#tUnit').value) tStatus();
+}
+const tCls = () => $('#tClass').value.trim().slice(0, 12);
+function skipList(cfg, cls) {
+  const x = [], note = [];
+  Object.keys(cfg.u).map(Number).sort((a, b) => b - a).forEach(k => {
+    const want = +cfg.u[k] || 0; if (!want) return;
+    const last = new Map();                             // 틀 → 마지막으로 낸 회차 순번
+    HIST.forEach((h, i) => { if ((h.c || '') === cls) h.f.forEach(f => { if (FUNIT[f] === k) last.set(f, i); }); });
+    let ex = [...last.entries()].sort((a, b) => a[1] - b[1]).map(e => e[0]);
+    const fresh = FRAMES[k] - ex.length, again = Math.max(0, want - fresh);
+    if (again) { ex = ex.slice(again); note.push(`U${k}은 새 문제가 ${fresh ? fresh + "개뿐이라" : "없어"} 가장 오래전에 낸 ${again}개를 다시 냅니다`); }
+    ex.forEach(f => x.push(f));
+  });
+  return { x, note };
+}
 function tStatus() {
   const u = +$('#tUnit').value, n = +$('#tN').value, uu = D.units.find(x => x.n === u);
+  const sk = $('#tSkip').checked ? skipList(tCfg, tCls()) : { x: [], note: [] };
+  tCfg.x = sk.x;
+  $('#tSkipNote').textContent = !$('#tSkip').checked ? '' : sk.x.length || sk.note.length
+    ? `— 이 반이 이미 본 ${sk.x.length}개 제외` + (sk.note.length ? ' · ' + sk.note.join(' · ') : '') : '— 이 반에 낸 기록이 아직 없습니다';
   const su = cfgSum(Object.values(tCfg.u)), sl = cfgSum(tCfg.l);
   const bad = t => `<span style="color:var(--no)">${t}</span>`;
   $('#tUSum').innerHTML = su === n ? `합계 ${su}` : bad(`합계 ${su} — ${n}문제가 되도록 맞춰 주세요`);
@@ -945,9 +993,13 @@ async function openExam() {
   if (cfgSum(Object.values(tCfg.u)) !== n || cfgSum(tCfg.l) !== n) return tStatus();
   // 2026-09-30: 코드의 시각 칸은 이제 '연 시각'(12시간 지나면 지난 코드). 종료 시각은 「시작」을 누를 때 서버가 정한다.
   const now = new Date(), endMin = now.getHours() * 60 + now.getMinutes();
-  const code = packCode(unit, endMin, Math.floor(Math.random() * SEED_N), n, pass);
+  const seed = Math.floor(Math.random() * SEED_N);
+  const code = packCode(unit, endMin, seed, n, pass);
   const guard = +$('#tGuard').value;                   // 이탈 N회째 자동 제출(0 = 끔)
-  const cfg = { u: Object.assign({}, tCfg.u), l: tCfg.l.slice(), g: guard };   // g: 옛 서버도 「설정」 열에 그대로 두었다가 학생 앱에 돌려준다
+  const cfg = { u: Object.assign({}, tCfg.u), l: tCfg.l.slice(), g: guard, c: tCls() };
+  if ($('#tSkip').checked) { const sk = skipList(tCfg, cfg.c); if (sk.x.length) cfg.x = sk.x; }   // x: 이 반이 이미 본 틀
+  cfg.f = examItems(unit, seed, cfg).items.map(it => frameOf(it.id));                              // f: 이번에 내는 틀(다음 회차가 뺀다)
+  store.set('cls', cfg.c);   // g: 옛 서버도 「설정」 열에 그대로 두었다가 학생 앱에 돌려준다
   $('#tOpen').disabled = true; $('#tOpenMsg').textContent = '채점 서버에 등록하는 중…';
   // 채점 스크립트가 아직 옛 버전(「시작」 요청이 없음)이면 예전처럼 열 때부터 시간을 센다 — 대신 초 단위까지 정확히
   let legacy = false;                                  // ping 의 v 가 2 이상이면 새 서버(비밀번호 틀린 요청으로 떠보면 저장된 비밀번호가 지워진다 — 쓰지 않는다)
@@ -970,6 +1022,7 @@ async function openExam() {
   live = { unit, code, end: 0, mins, pass, n, cfg, guard };
   CFG[code] = { cfg: cfg, n: n, pass: pass, guard: guard }; store.set('cfg:' + code, CFG[code]);
   const mine = store.get('myCodes', []); mine.push(code); store.set('myCodes', mine.slice(-20));
+  histMerge([{ at: Date.now(), code: code, c: cfg.c, f: cfg.f }]); tStatus();
   $('#liveCode').textContent = code;
   $('#liveInfo').textContent = `Unit ${unit} · ${cfgLabel(cfg)} · ${n}문제 · ${pass}문제 이상 합격 · 제한 ${mins}분 · ${guard ? `이탈 ${guard}회째 자동 제출` : '이탈 기록만'} · 「시작」 전`;
   $('#liveBox').classList.remove('hide');
